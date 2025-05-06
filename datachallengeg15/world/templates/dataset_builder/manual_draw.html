@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Drawing - Maze Dataset Builder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dataset_builder_styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="logo">Maze Dataset Builder</div>
+            <h3>Generators</h3>
+            {% for key, gen in generators.items() %}
+            <a href="/create_dataset?generator={{ key }}" class="generator-button {% if current_generator == key %}active{% endif %}">
+                {{ gen.name }}
+            </a>
+            {% endfor %}
+            <div style="margin-top: 20px;">
+                <a href="/" class="generator-button">← Return Home</a>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="dataset-name-container">
+                <div class="dataset-name" id="dataset-name">{{ dataset_name }}</div>
+            </div>
+            
+            <div class="content-columns" id="content-columns">
+                <div class="column" id="drawing-panel">
+                    <div class="column-title">Manual Drawing</div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label class="form-label">Grid Size:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="grid-width" class="form-select">
+                                <option value="11">11</option>
+                                <option value="21" selected>21</option>
+                                <option value="31">31</option>
+                                <option value="41">41</option>
+                                <option value="51">51</option>
+                            </select>
+                            <div style="display: flex; align-items: center;">×</div>
+                            <select id="grid-height" class="form-select">
+                                <option value="11">11</option>
+                                <option value="21" selected>21</option>
+                                <option value="31">31</option>
+                                <option value="41">41</option>
+                                <option value="51">51</option>
+                            </select>
+                            <span id="dimensions-display" style="margin-left: 10px; color: #aaa; display: flex; align-items: center;">Grid: 21×21</span>
+                        </div>
+                        
+                        <div class="checkbox-container" style="margin-top: 10px;">
+                            <input type="checkbox" id="enforce-connectivity" checked>
+                            <label for="enforce-connectivity">Enforce full connectivity when saving</label>
+                        </div>
+                    </div>
+                    
+                    <div class="drawing-tools">
+                        <button type="button" class="tool-btn" id="clear-grid">Clear Grid</button>
+                        <button type="button" class="generate-btn" id="save-maze-btn">Save Maze</button>
+                    </div>
+                    
+                    <div class="canvas-container">
+                        <canvas id="maze-canvas" style="border: 1px solid var(--border-color); margin: 15px auto; display: block;"></canvas>
+                    </div>
+                </div>
+                
+                <div class="column">
+                    {% include 'dataset_builder/dataset_configurator.html' %}
+                </div>
+            </div>
+            
+            <div id="saved-mazes-container" class="saved-mazes-container" style="display: none;">
+                <div class="saved-mazes-title">Saved Mazes</div>
+                <div id="saved-mazes-grid" class="saved-mazes-grid">
+                    <!-- Saved mazes will be displayed here -->
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px;">
+                    <button class="tool-btn" id="clear-all-mazes">Clear All Saved Mazes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='generator_config.js') }}"></script>
+    <script>
+        // Handle dataset name editing
+        const datasetNameElem = document.getElementById('dataset-name');
+        datasetNameElem.addEventListener('click', function() {
+            const currentName = this.textContent;
+            const newName = prompt('Enter a new dataset name:', currentName);
+            
+            if (newName && newName.trim() !== '') {
+                // Send AJAX request to update name
+                fetch('/update_dataset_name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: newName.trim() })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.textContent = data.name;
+                    }
+                });
+            }
+        });
+        
+        // Manual Drawing Variables
+        let canvas, ctx;
+        let gridWidth = 21;
+        let gridHeight = 21;
+        let cellSize = 20;
+        let grid = [];
+        let isDrawing = false;
+        let drawMode = null; // Will be set when starting to draw
+        
+        // Initialize grid on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM Content Loaded - Initializing drawing grid");
+            
+            // Get references to key elements
+            canvas = document.getElementById('maze-canvas');
+            if (!canvas) {
+                console.error("Canvas element not found!");
+                return;
+            }
+            
+            ctx = canvas.getContext('2d');
+            
+            // Get the initial grid size values
+            const gridWidthSelect = document.getElementById('grid-width');
+            const gridHeightSelect = document.getElementById('grid-height');
+            
+            if (gridWidthSelect && gridHeightSelect) {
+                gridWidth = parseInt(gridWidthSelect.value) || 21;
+                gridHeight = parseInt(gridHeightSelect.value) || 21;
+                
+                // Set up event listeners for grid size changes
+                gridWidthSelect.addEventListener('change', function() {
+                    gridWidth = parseInt(this.value) || 21;
+                    initializeGrid();
+                });
+                
+                gridHeightSelect.addEventListener('change', function() {
+                    gridHeight = parseInt(this.value) || 21;
+                    initializeGrid();
+                });
+            }
+            
+            // Setup canvas interaction events
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('mouseleave', onMouseLeave);
+            
+            // Setup action buttons
+            document.getElementById('clear-grid')?.addEventListener('click', clearGrid);
+            document.getElementById('save-maze-btn')?.addEventListener('click', saveMaze);
+            
+            // Initialize the grid
+            initializeGrid();
+            
+            // Show the saved mazes container
+            document.getElementById('saved-mazes-container').style.display = 'block';
+        });
+        
+        // Function to initialize the grid
+        function initializeGrid() {
+            console.log(`Initializing grid: ${gridWidth}x${gridHeight}`);
+            
+            // Check if we have a valid canvas
+            if (!canvas || !ctx) {
+                console.error("Canvas or context is not available!");
+                return;
+            }
+            
+            // Calculate cell size based on available space
+            const maxWidth = 600;  // Maximum width constraint
+            const maxHeight = 600; // Maximum height constraint
+            
+            // Calculate the largest cell size that will fit within our constraints
+            const horizontalCellSize = Math.floor(maxWidth / gridWidth);
+            const verticalCellSize = Math.floor(maxHeight / gridHeight);
+            cellSize = Math.min(horizontalCellSize, verticalCellSize);
+            
+            // Ensure cell size is at least 10px for visibility
+            cellSize = Math.max(10, cellSize);
+            
+            // Set canvas dimensions based on cell size and grid dimensions
+            canvas.width = cellSize * gridWidth;
+            canvas.height = cellSize * gridHeight;
+            console.log(`Setting canvas dimensions: ${canvas.width}x${canvas.height} with cell size ${cellSize}`);
+            
+            // Update dimensions display
+            const dimensionsDisplay = document.getElementById('dimensions-display');
+            if (dimensionsDisplay) {
+                dimensionsDisplay.textContent = `Grid: ${gridWidth}×${gridHeight}`;
+            }
+            
+            // Reset grid data with borders
+            grid = [];
+            for (let y = 0; y < gridHeight; y++) {
+                const row = [];
+                for (let x = 0; x < gridWidth; x++) {
+                    // Set borders (outer edges) to walls (1)
+                    if (x === 0 || x === gridWidth - 1 || y === 0 || y === gridHeight - 1) {
+                        row.push(1);
+                    } else {
+                        row.push(0);
+                    }
+                }
+                grid.push(row);
+            }
+            
+            // Draw the grid
+            drawGrid();
+            
+            // Load saved mazes
+            loadSavedMazes();
+        }
+        
+        // Function to draw the grid
+        function drawGrid() {
+            if (!ctx || !canvas) {
+                console.error("Cannot draw grid - context or canvas not available");
+                return;
+            }
+            
+            // Make sure the dimensions are correct
+            if (canvas.width !== cellSize * gridWidth || canvas.height !== cellSize * gridHeight) {
+                canvas.width = cellSize * gridWidth;
+                canvas.height = cellSize * gridHeight;
+            }
+            
+            // Clear canvas with a light color first to ensure we don't have a black canvas
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid cells
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    // Get the cell value, defaulting to 0 if not set
+                    const cellValue = grid[y]?.[x] ?? 0;
+                    
+                    // Set fill color based on cell value (black for walls, white for paths)
+                    ctx.fillStyle = cellValue === 1 ? '#000000' : '#FFFFFF';
+                    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                    
+                    // Draw cell border
+                    ctx.strokeStyle = '#444444';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+        
+        // Function to update grid size - removed as we now handle it in the change event
+        function updateGridSize() {
+            // This function is no longer used - grid size is handled by event listeners
+        }
+        
+        // Mouse event handlers
+        function onMouseDown(e) {
+            isDrawing = true;
+            
+            // Determine drawing mode based on first cell clicked
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+            
+            // Only set drawing mode if clicking on a valid cell (not border)
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight && 
+                !(x === 0 || x === gridWidth - 1 || y === 0 || y === gridHeight - 1)) {
+                // If starting on a wall (1), erase to path (0)
+                // If starting on a path (0), draw walls (1)
+                drawMode = grid[y][x] === 1 ? 0 : 1;
+                
+                // Apply the drawing mode to the clicked cell
+                grid[y][x] = drawMode;
+                
+                // Redraw grid
+                drawGrid();
+            }
+        }
+        
+        function onMouseMove(e) {
+            if (isDrawing) {
+                handleDraw(e);
+            }
+            
+            // Update coordinates display
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+            
+            // Display coordinates if within canvas bounds
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                const coordDisplay = document.getElementById('coordinates-display');
+                coordDisplay.textContent = `X: ${x}, Y: ${y}`;
+                
+                // Highlight coordinates if they're on a modifiable cell (not a border)
+                if (x === 0 || x === gridWidth - 1 || y === 0 || y === gridHeight - 1) {
+                    coordDisplay.style.color = '#666'; // Dimmer color for borders
+                } else {
+                    coordDisplay.style.color = '#aaa'; // Normal color for modifiable cells
+                }
+            }
+        }
+        
+        function onMouseUp() {
+            isDrawing = false;
+            drawMode = null; // Reset draw mode when done drawing
+        }
+        
+        function onMouseLeave() {
+            isDrawing = false;
+            drawMode = null; // Reset draw mode when leaving canvas
+        }
+        
+        // Function to handle drawing on the canvas
+        function handleDraw(e) {
+            // If not in drawing mode or drawMode not set, exit
+            if (!isDrawing || drawMode === null) return;
+            
+            // Get mouse position relative to canvas
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+            
+            // Check if position is valid and not on the border
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight && 
+                !(x === 0 || x === gridWidth - 1 || y === 0 || y === gridHeight - 1)) {
+                // Set the cell to the current draw mode
+                grid[y][x] = drawMode;
+                
+                // Redraw grid
+                drawGrid();
+            }
+        }
+        
+        // Function to clear the grid
+        function clearGrid() {
+            // Reset grid (keep borders)
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    if (x === 0 || x === gridWidth - 1 || y === 0 || y === gridHeight - 1) {
+                        grid[y][x] = 1;
+                    } else {
+                        grid[y][x] = 0;
+                    }
+                }
+            }
+            
+            // Redraw grid
+            drawGrid();
+        }
+        
+        // Function to save the maze
+        function saveMaze() {
+            console.log("Saving maze...");
+            
+            // Create a copy of the grid for saving
+            const gridData = JSON.parse(JSON.stringify(grid));
+            
+            // Get the enforce connectivity setting
+            const enforceConnectivity = document.getElementById('enforce-connectivity').checked;
+            
+            // Disable the save button during the request
+            const saveButton = document.getElementById('save-maze-btn');
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.textContent = 'Saving...';
+            }
+            
+            // Send the maze data to the server
+            fetch('/save_manual_maze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    grid_data: gridData,
+                    width: gridWidth,
+                    height: gridHeight,
+                    enforce_connectivity: enforceConnectivity
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'Save Maze';
+                }
+                
+                if (data.success) {
+                    // Create a card for the saved maze
+                    const savedMazesGrid = document.getElementById('saved-mazes-grid');
+                    
+                    if (savedMazesGrid) {
+                        // Create maze card
+                        const mazeCard = document.createElement('div');
+                        mazeCard.className = 'map-card';
+                        mazeCard.dataset.mazeId = data.maze_id;
+                        
+                        // Create delete button
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.innerHTML = '×';
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.stopPropagation(); // Prevent any parent handlers from firing
+                            
+                            if (confirm('Delete this maze?')) {
+                                const mazeId = mazeCard.dataset.mazeId;
+                                
+                                // Send request to delete the maze
+                                fetch('/delete_manual_maze', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        maze_id: mazeId
+                                    })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        // Remove the card from the display
+                                        mazeCard.remove();
+                                        
+                                        // If no more mazes, hide the saved mazes container
+                                        const savedMazesGrid = document.getElementById('saved-mazes-grid');
+                                        if (savedMazesGrid && savedMazesGrid.children.length === 0) {
+                                            document.getElementById('saved-mazes-container').style.display = 'none';
+                                        }
+                                    } else {
+                                        console.error('Error deleting maze:', data.error);
+                                        alert('Error deleting maze: ' + data.error);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    alert('Error deleting maze: ' + error.message);
+                                });
+                            }
+                        });
+                        
+                        // Create maze image
+                        const mazeImage = document.createElement('img');
+                        mazeImage.src = 'data:image/png;base64,' + data.maze_image;
+                        mazeImage.className = 'map-image';
+                        mazeImage.alt = 'Maze';
+                        
+                        // Create maze info
+                        const mazeInfo = document.createElement('div');
+                        mazeInfo.className = 'map-info';
+                        mazeInfo.textContent = `Manual ${data.dimensions}`;
+                        
+                        // Add components to card
+                        mazeCard.appendChild(deleteBtn);
+                        mazeCard.appendChild(mazeImage);
+                        mazeCard.appendChild(mazeInfo);
+                        
+                        // Add card to grid
+                        savedMazesGrid.prepend(mazeCard);
+                        
+                        // Show saved mazes container if hidden
+                        document.getElementById('saved-mazes-container').style.display = 'block';
+                    }
+                } else {
+                    console.error('Error saving maze:', data.error);
+                    alert('Error saving maze: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'Save Maze';
+                }
+                alert('Error saving maze: ' + error.message);
+            });
+        }
+        
+        // Function to clear all saved mazes
+        document.getElementById('clear-all-mazes')?.addEventListener('click', function() {
+            if (!confirm('Clear all saved mazes? This cannot be undone.')) return;
+            
+            fetch('/clear_manual_mazes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear the saved mazes grid
+                    const savedMazesGrid = document.getElementById('saved-mazes-grid');
+                    if (savedMazesGrid) {
+                        savedMazesGrid.innerHTML = '';
+                    }
+                }
+            });
+        });
+        
+        // Function to load saved mazes from the server
+        function loadSavedMazes() {
+            fetch('/get_manual_mazes')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.mazes && data.mazes.length > 0) {
+                        // Get the container for saved mazes
+                        const savedMazesGrid = document.getElementById('saved-mazes-grid');
+                        if (!savedMazesGrid) return;
+                        
+                        // Clear existing content
+                        savedMazesGrid.innerHTML = '';
+                        
+                        // Add each maze to the UI
+                        data.mazes.forEach(maze => {
+                            // Create maze card
+                            const mazeCard = document.createElement('div');
+                            mazeCard.className = 'map-card';
+                            mazeCard.dataset.mazeId = maze.maze_id;
+                            
+                            // Create delete button
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'delete-btn';
+                            deleteBtn.innerHTML = '×';
+                            deleteBtn.addEventListener('click', function(e) {
+                                e.stopPropagation(); // Prevent any parent handlers from firing
+                                
+                                if (confirm('Delete this maze?')) {
+                                    const mazeId = mazeCard.dataset.mazeId;
+                                    
+                                    // Send request to delete the maze
+                                    fetch('/delete_manual_maze', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({
+                                            maze_id: mazeId
+                                        })
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            // Remove the card from the display
+                                            mazeCard.remove();
+                                            
+                                            // If no more mazes, hide the saved mazes container
+                                            if (savedMazesGrid.children.length === 0) {
+                                                document.getElementById('saved-mazes-container').style.display = 'none';
+                                            }
+                                        } else {
+                                            console.error('Error deleting maze:', data.error);
+                                            alert('Error deleting maze: ' + data.error);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        alert('Error deleting maze: ' + error.message);
+                                    });
+                                }
+                            });
+                            
+                            // Create maze image
+                            const mazeImage = document.createElement('img');
+                            mazeImage.src = 'data:image/png;base64,' + maze.maze_image;
+                            mazeImage.className = 'map-image';
+                            mazeImage.alt = 'Maze';
+                            
+                            // Create maze info
+                            const mazeInfo = document.createElement('div');
+                            mazeInfo.className = 'map-info';
+                            mazeInfo.textContent = `Manual ${maze.dimensions}`;
+                            
+                            // Add components to card
+                            mazeCard.appendChild(deleteBtn);
+                            mazeCard.appendChild(mazeImage);
+                            mazeCard.appendChild(mazeInfo);
+                            
+                            // Add card to grid
+                            savedMazesGrid.appendChild(mazeCard);
+                        });
+                        
+                        // Show the saved mazes container
+                        document.getElementById('saved-mazes-container').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading saved mazes:', error);
+                });
+        }
+    </script>
+</body>
+</html> 

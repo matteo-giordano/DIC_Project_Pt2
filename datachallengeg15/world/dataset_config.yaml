@@ -1,0 +1,76 @@
+ensure_connected: true
+ensure_unique: true
+generators:
+  gaussian:
+    count_per_config: 10
+    height:
+    - 21
+    - 31
+    - 41
+    sigma_x:
+    - 1
+    - 1.5
+    sigma_y:
+    - 1
+    - 1.5
+    threshold:
+    - 0.65
+    - 0.7000000000000001
+    - 0.5
+    - 0.55
+    width:
+    - 21
+    - 41
+    - 31
+  manual:
+    count_per_config: 1
+    height:
+    - 21
+    width:
+    - 21
+  prim:
+    count_per_config: 10
+    height:
+    - 21
+    - 25
+    - 29
+    width:
+    - 21
+    - 25
+    - 29
+  recursive:
+    count_per_config: 10
+    height:
+    - 21
+    - 29
+    - 41
+    width:
+    - 21
+    - 29
+    - 35
+  terrain:
+    blob_density:
+    - 0.005
+    - 0.006
+    - 0.002
+    - 0.003
+    - 0.004
+    count_per_config: 10
+    height:
+    - 21
+    - 23
+    - 27
+    - 33
+    width:
+    - 21
+    - 41
+    - 31
+  wilson:
+    count_per_config: 10
+    height:
+    - 21
+    - 11
+    width:
+    - 21
+    - 33
+name: exampul

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dataset Explorer - Maze Dataset Builder</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #64b5f6;
+            --panel-bg: #2d2d2d;
+            --border-color: #444;
+            --button-color: #394e63;
+            --button-hover: #4a6583;
+            --input-bg: #252525;
+            --input-border: #444;
+            --card-bg: #2d2d2d;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --disabled-color: #555;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 240px;
+            background-color: var(--panel-bg);
+            color: var(--text-color);
+            padding: 15px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .logo {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+            text-align: center;
+        }
+        
+        .sidebar-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .dataset-name {
+            font-size: 18px;
+            color: var(--accent-color);
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        
+        .stats-badge {
+            display: inline-block;
+            background-color: rgba(100, 181, 246, 0.2);
+            color: var(--accent-color);
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+        }
+        
+        .filters-container {
+            margin-top: 20px;
+        }
+        
+        .filters-container h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .filters-container h3::before {
+            content: ">";
+            margin-right: 8px;
+            color: var(--success-color);
+        }
+        
+        .filter-group {
+            margin-bottom: 20px;
+        }
+        
+        .filter-group label {
+            display: block;
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        .apply-filters-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: var(--button-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        
+        .apply-filters-btn:hover {
+            background-color: var(--button-hover);
+        }
+        
+        .return-link {
+            display: block;
+            margin-top: 20px;
+            color: var(--accent-color);
+            text-decoration: none;
+            padding: 8px 0;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .main-header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--accent-color);
+        }
+        
+        .pagination-info {
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .nav-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 15px;
+            background-color: var(--button-color);
+            color: var(--text-color);
+            text-decoration: none;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        
+        .nav-button:hover:not(.disabled) {
+            background-color: var(--button-hover);
+        }
+        
+        .nav-button.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: var(--disabled-color);
+        }
+        
+        .nav-button i {
+            margin: 0 5px;
+        }
+        
+        .keyboard-shortcut {
+            margin-left: 5px;
+            opacity: 0.7;
+            font-size: 12px;
+        }
+        
+        .mazes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+        }
+        
+        .maze-container {
+            background-color: var(--panel-bg);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .maze-container:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .maze-info {
+            padding: 8px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        
+        .generator-badge, .dimension-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background-color: rgba(100, 181, 246, 0.2);
+            color: var(--accent-color);
+        }
+        
+        .maze-display {
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .maze-display canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .maze-detail-link {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .toast {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            width: 300px;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .toast-content {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .toast-content i {
+            margin-right: 10px;
+            color: var(--accent-color);
+        }
+        
+        .toast-actions {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .toast-btn {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
+        
+        .toast-close {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar for filters -->
+        <aside class="sidebar">
+            <div class="logo">Maze Dataset Builder</div>
+            <div class="sidebar-header">
+                <div class="dataset-name">{{ dataset_name }}</div>
+                <div class="stats-badge">{{ total_mazes }} mazes</div>
+            </div>
+            
+            <div class="filters-container">
+                <form action="{{ url_for('apply_filters') }}" method="POST" class="filters-form">
+                    <h3>Filters</h3>
+                    
+                    <div class="filter-group">
+                        <label>Generator Types</label>
+                        <div class="checkbox-container">
+                            {% for gen_type in generator_types %}
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="gen_{{ gen_type }}" name="generator_types" 
+                                      value="{{ gen_type }}" {% if gen_type in selected_generators %}checked{% endif %}>
+                                <label for="gen_{{ gen_type }}">{{ gen_type }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Dimensions</label>
+                        <div class="checkbox-container">
+                            {% for dim in dimensions %}
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="dim_{{ dim[0] }}_{{ dim[1] }}" name="dimensions" 
+                                      value="{{ dim[0] }},{{ dim[1] }}" 
+                                      {% if dim in selected_dimensions %}checked{% endif %}>
+                                <label for="dim_{{ dim[0] }}_{{ dim[1] }}">{{ dim[0] }}x{{ dim[1] }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="apply-filters-btn">
+                        Apply Filters
+                    </button>
+                </form>
+                
+                <a href="/" class="return-link">
+                    Return Home
+                </a>
+            </div>
+        </aside>
+        
+        <!-- Main content area -->
+        <main class="main-content">
+            <div class="main-header">
+                <h1>Dataset Explorer</h1>
+                <div class="pagination-info">
+                    Page {{ current_page }} of {{ total_pages }}
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="navigation">
+                {% if prev_page is not none %}
+                <a href="{{ url_for('view_page', page=prev_page) }}" class="nav-button">
+                    &lt; Previous
+                    <span class="keyboard-shortcut" title="Use left arrow key">←</span>
+                </a>
+                {% else %}
+                <span class="nav-button disabled">
+                    &lt; Previous
+                </span>
+                {% endif %}
+                
+                {% if next_page is not none %}
+                <a href="{{ url_for('view_page', page=next_page) }}" class="nav-button">
+                    Next &gt;
+                    <span class="keyboard-shortcut" title="Use right arrow key">→</span>
+                </a>
+                {% else %}
+                <span class="nav-button disabled">
+                    Next &gt;
+                </span>
+                {% endif %}
+            </div>
+            
+            <!-- Mazes Grid -->
+            <div class="mazes-grid">
+                {% for i in range(mazes|length) %}
+                <a href="{{ url_for('maze_detail', index=maze_indices[i]) }}" class="maze-detail-link">
+                    <div class="maze-container">
+                        <div class="maze-info">
+                            <span class="generator-badge">{{ maze_metadata[i].generator_type }}</span>
+                            <span class="dimension-badge">{{ maze_metadata[i].width }}x{{ maze_metadata[i].height }}</span>
+                        </div>
+                        <div class="maze-display" id="maze-{{ i }}">
+                            <canvas width="{{ maze_metadata[i].width * 10 }}" height="{{ maze_metadata[i].height * 10 }}"></canvas>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </main>
+    </div>
+    
+    <div class="toast-container">
+        <div id="keyboardToast" class="toast">
+            <div class="toast-content">
+                <i>⌨️</i>
+                <span>Use left and right arrow keys to navigate between pages</span>
+            </div>
+            <div class="toast-actions">
+                <button class="toast-btn toast-dont-show" onclick="dismissToast(true)">Don't show again</button>
+                <button class="toast-close" onclick="dismissToast(false)">✕</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get maze data from Jinja template
+            const mazeData = JSON.parse('{{ mazes|tojson|safe }}');
+            
+            // Render each maze to its canvas
+            mazeData.forEach((maze, index) => {
+                const canvasEl = document.querySelector(`#maze-${index} canvas`);
+                if (canvasEl) {
+                    const ctx = canvasEl.getContext('2d');
+                    const cellSize = 10;
+                    
+                    // Define colors
+                    const colors = {
+                        '0': 'white',  // Empty space
+                        '1': '#2c3e50',  // Wall - modern dark blue/gray
+                        '2': '#2c3e50'   // For backward compatibility, treat 2s as walls
+                    };
+                    
+                    // Draw the maze
+                    for (let y = 0; y < maze.length; y++) {
+                        for (let x = 0; x < maze[y].length; x++) {
+                            const cellValue = String(maze[y][x]);
+                            ctx.fillStyle = colors[cellValue] || '#95a5a6';
+                            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                        }
+                    }
+                }
+            });
+            
+            // Show keyboard navigation toast
+            const keyboardToast = document.getElementById('keyboardToast');
+            if (keyboardToast) {
+                // Check if user has already seen the keyboard navigation message
+                const hasSeenKeyboardMessage = localStorage.getItem('hasSeenKeyboardMessage');
+                
+                // Only show message if user hasn't seen it before
+                if (!hasSeenKeyboardMessage) {
+                    setTimeout(() => {
+                        keyboardToast.classList.add('show');
+                        setTimeout(() => {
+                            keyboardToast.classList.remove('show');
+                        }, 5000);
+                    }, 1000);
+                }
+            }
+            
+            // Add keyboard navigation for pagination
+            document.addEventListener('keydown', function(event) {
+                // Left arrow key - Previous page
+                if (event.key === 'ArrowLeft') {
+                    const prevButton = document.querySelector('.nav-button:not(.disabled):first-child');
+                    if (prevButton && !prevButton.classList.contains('disabled')) {
+                        prevButton.click();
+                    }
+                }
+                
+                // Right arrow key - Next page
+                if (event.key === 'ArrowRight') {
+                    const nextButton = document.querySelector('.nav-button:not(.disabled):last-child');
+                    if (nextButton && !nextButton.classList.contains('disabled')) {
+                        nextButton.click();
+                    }
+                }
+            });
+        });
+        
+        // Function to dismiss the toast
+        function dismissToast(dontShowAgain) {
+            const toast = document.getElementById('keyboardToast');
+            if (toast) {
+                toast.classList.remove('show');
+                
+                // If user clicked "Don't show again", set the localStorage flag
+                if (dontShowAgain) {
+                    localStorage.setItem('hasSeenKeyboardMessage', 'true');
+                }
+            }
+        }
+    </script>
+</body>
+</html> 

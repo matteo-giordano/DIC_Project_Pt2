@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Detail - Maze Dataset Builder</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #64b5f6;
+            --panel-bg: #2d2d2d;
+            --border-color: #444;
+            --button-color: #394e63;
+            --button-hover: #4a6583;
+            --input-bg: #252525;
+            --input-border: #444;
+            --card-bg: #2d2d2d;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --disabled-color: #555;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--accent-color);
+        }
+        
+        .maze-position {
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-links a {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 15px;
+            background-color: var(--button-color);
+            color: var(--text-color);
+            text-decoration: none;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        
+        .nav-links a:hover {
+            background-color: var(--button-hover);
+        }
+        
+        .nav-links .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .back-link {
+            margin-bottom: 20px;
+            display: inline-block;
+            padding: 8px 15px;
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .maze-preview {
+            flex: 1;
+            min-width: 300px;
+            background-color: var(--panel-bg);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .maze-image {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .maze-details {
+            flex: 1;
+            min-width: 300px;
+            background-color: var(--panel-bg);
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+        
+        .detail-section {
+            margin-bottom: 20px;
+        }
+        
+        .detail-section h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: var(--accent-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        
+        .detail-item {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        
+        .detail-item .label {
+            width: 150px;
+            color: #aaa;
+        }
+        
+        .detail-item .value {
+            flex: 1;
+        }
+        
+        .download-btn {
+            display: inline-block;
+            padding: 8px 15px;
+            background-color: var(--button-color);
+            color: var(--text-color);
+            text-decoration: none;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-top: 15px;
+            transition: background-color 0.2s;
+        }
+        
+        .download-btn:hover {
+            background-color: var(--button-hover);
+        }
+        
+        .maze-data-section {
+            margin-top: 30px;
+            background-color: var(--panel-bg);
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+        
+        .maze-data-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: var(--accent-color);
+        }
+        
+        .maze-data-container {
+            background-color: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('view_page', page=session.get('current_page', 1)) }}" class="back-link">
+            &lt; Back to Explorer
+        </a>
+        
+        <div class="header">
+            <h1>Maze Detail</h1>
+            <div class="maze-position">{{ current_pos }} of {{ total }}</div>
+        </div>
+        
+        <div class="nav-links">
+            {% if prev_index is not none %}
+            <a href="{{ url_for('maze_detail', index=prev_index) }}">
+                &lt; Previous Maze
+            </a>
+            {% else %}
+            <a class="disabled">
+                &lt; Previous Maze
+            </a>
+            {% endif %}
+            
+            {% if next_index is not none %}
+            <a href="{{ url_for('maze_detail', index=next_index) }}">
+                Next Maze &gt;
+            </a>
+            {% else %}
+            <a class="disabled">
+                Next Maze &gt;
+            </a>
+            {% endif %}
+        </div>
+        
+        <div class="content">
+            <div class="maze-preview">
+                <img src="data:image/png;base64,{{ maze_img }}" alt="Maze visualization" class="maze-image">
+            </div>
+            
+            <div class="maze-details">
+                <div class="detail-section">
+                    <h2>Maze Information</h2>
+                    
+                    <div class="detail-item">
+                        <div class="label">Generator:</div>
+                        <div class="value">{{ metadata.generator_type }}</div>
+                    </div>
+                    
+                    <div class="detail-item">
+                        <div class="label">Dimensions:</div>
+                        <div class="value">{{ metadata.width }}x{{ metadata.height }}</div>
+                    </div>
+                    
+                    <div class="detail-item">
+                        <div class="label">Index:</div>
+                        <div class="value">{{ index }}</div>
+                    </div>
+                    
+                    {% if metadata.timestamp %}
+                    <div class="detail-item">
+                        <div class="label">Generated:</div>
+                        <div class="value">{{ metadata.timestamp }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Additional generator-specific parameters if available -->
+                    {% for key, value in metadata.items() %}
+                        {% if key not in ['generator_type', 'width', 'height', 'timestamp'] %}
+                        <div class="detail-item">
+                            <div class="label">{{ key }}:</div>
+                            <div class="value">{{ value }}</div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                
+                <a href="{{ url_for('download_metadata', index=index) }}" class="download-btn" download="maze_{{ index }}_metadata.json">
+                    Download Metadata
+                </a>
+            </div>
+        </div>
+        
+        <div class="maze-data-section">
+            <h2>Maze Data</h2>
+            <div class="maze-data-container">
+                <pre>{{ maze|tojson(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add keyboard navigation between mazes
+            document.addEventListener('keydown', function(event) {
+                // Left arrow key - Previous maze
+                if (event.key === 'ArrowLeft') {
+                    const prevLink = document.querySelector('.nav-links a:not(.disabled):first-child');
+                    if (prevLink && !prevLink.classList.contains('disabled')) {
+                        prevLink.click();
+                    }
+                }
+                
+                // Right arrow key - Next maze
+                if (event.key === 'ArrowRight') {
+                    const nextLink = document.querySelector('.nav-links a:not(.disabled):last-child');
+                    if (nextLink && !nextLink.classList.contains('disabled')) {
+                        nextLink.click();
+                    }
+                }
+                
+                // Backspace key - Back to explorer
+                if (event.key === 'Backspace') {
+                    const backLink = document.querySelector('.back-link');
+                    if (backLink) {
+                        backLink.click();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
