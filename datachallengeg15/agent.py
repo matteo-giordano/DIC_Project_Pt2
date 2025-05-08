@@ -1,0 +1,90 @@
+from abc import ABC, abstractmethod
+
+import numpy as np 
+import networkx as nx
+import random
+
+
+class BaseAgent(ABC):
+    def __init__(self):
+        """Base agent. All other agents should build on this class.
+
+        As a reminder, you are free to add more methods/functions to this class
+        if your agent requires it.
+        """
+
+    @abstractmethod
+    def take_action(self, state: tuple[int, int]) -> int:
+        """Any code that does the action should be included here.
+
+        Args:
+            state: The updated position of the agent.
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def update(self, state: tuple[int, int], reward: float, action: int):
+        """Any code that processes a reward given the state and updates the agent.
+
+        Args:
+            state: The updated position of the agent.
+            reward: The value which is returned by the environment as a
+                reward.
+            action: The action which was taken by the agent.
+        """
+        raise NotImplementedError
+  
+
+class TabularQLearningAgent(BaseAgent):
+    def __init__(self, graph: nx.Graph, alpha: float = 0.1, gamma: float = 0.99, epsilon: float = 0.1):
+        self.graph = graph
+        self.alpha = alpha
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.q_table = {}
+        
+    def get_action(self, state):
+        return list(self.graph.neighbors(state))
+    
+    def get_q(self, state, action):
+        return self.q_table.get((state, action), 0.)
+    
+    def take_action(self, state):
+        actions = self.get_action(state)
+        if not actions:
+            return None
+        if np.random.rand() < self.epsilon:
+            return random.choice(actions)
+        q_values = [self.get_q(state, a) for a in actions]
+        max_q = max(q_values)
+        best_actions = [a for a, q in zip(actions, q_values) if q == max_q]
+        return random.choice(best_actions)
+    
+    def update(self, state, action, reward, next_state):
+        next_actions = self.get_action(next_state)
+        max_next_q = max([self.get_q(next_state, a) for a in next_actions], default=0.)
+        current_q = self.get_q(state, action)
+        new_q = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
+        self.q_table[(state, action)] = new_q
+        
+    def extract_policy_path(self, start, end, max_steps=1000):
+        state = start
+        path = [state]
+        visited = set()
+        for _ in range(max_steps):
+            if state == end:
+                break
+            actions = self.get_action(state)
+            if not actions:
+                break
+            q_values = [self.get_q(state, a) for a in actions]
+            best_action = actions[np.argmax(q_values)]
+            if best_action in visited:
+                break
+            visited.add(best_action)
+            state = best_action
+            path.append(state)
+        return path
+        
+        
+            
