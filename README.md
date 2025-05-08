@@ -149,6 +149,61 @@ map_data, metadata = dataset.sample(
 )
 ```
 
+## Dataset Builder Web Application
+
+The project includes a web-based tool for creating and managing maze datasets with a user-friendly interface.
+
+### Features
+
+- Generate mazes using multiple algorithms:
+  - **Prim Algorithm**: Creates perfect mazes with exactly one path between any two points
+  - **Recursive Division**: Generates mazes by recursively dividing the space
+  - **Wilson's Algorithm**: Creates unbiased samples of perfect mazes
+  - **Terrain Generator**: Creates more organic, terrain-like structures
+  - **Gaussian Noise**: Generates random mazes with controllable smoothness
+  - **Manual Drawing**: Draw custom mazes by hand
+
+- Configure generation parameters:
+  - Maze dimensions (11×11 to 51×51)
+  - Algorithm-specific parameters (e.g., density, thresholds)
+  - Batch generation settings
+
+- Dataset management:
+  - Create datasets with mixed maze types
+  - Preview generated mazes before saving
+  - Ensure connectivity and uniqueness across mazes
+  - Save datasets to the `./datasets` folder
+  - Load and explore existing datasets
+
+- Exploration tools:
+  - Filter mazes by type and size
+  - View metadata for each maze
+  - Navigate through large collections
+
+### Running the Dataset Builder
+
+To launch the web application:
+
+```bash
+# Navigate to the project directory
+cd datachallengeg15
+
+# Run the web application
+python dataset_builder_web.py
+```
+
+The application will be available at http://localhost:5000 in your web browser.
+
+### Workflow
+
+1. **Create New Dataset**: Select maze generator types and configure parameters
+2. **Generate Sample Mazes**: Preview how mazes will look with current settings
+3. **Configure Dataset**: Set batch generation parameters for the full dataset
+4. **Generate Dataset**: Create the complete dataset with all configured maze types
+5. **Explore Results**: Browse, filter, and inspect the generated dataset
+
+Generated datasets are automatically saved to the `./datasets` directory and can be loaded directly into the framework using the Dataset class.
+
 ## Implementing New Agents
 
 To implement a new agent, extend the `BaseAgent` abstract class in `agent.py`:
