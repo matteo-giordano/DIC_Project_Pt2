@@ -1,230 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Dataset - Maze Dataset Builder</title>
-    <style>
-        :root {
-            --bg-color: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent-color: #64b5f6;
-            --panel-bg: #2d2d2d;
-            --border-color: #444;
-            --button-color: #394e63;
-            --button-hover: #4a6583;
-            --input-bg: #252525;
-            --input-border: #444;
-            --card-bg: #2d2d2d;
-            --success-color: #4caf50;
-            --error-color: #f44336;
-            --disabled-color: #555;
-        }
-        
-        body {
-            font-family: 'Consolas', 'Monaco', monospace;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-        }
-        .container {
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 220px;
-            background-color: var(--panel-bg);
-            color: var(--text-color);
-            padding: 15px;
-            overflow-y: auto;
-            border-right: 1px solid var(--border-color);
-        }
-        .logo {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            color: var(--accent-color);
-            text-align: center;
-        }
-        .main-content {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        .dataset-name-container {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .dataset-name {
-            font-size: 18px;
-            padding: 8px 12px;
-            border: 1px dashed var(--border-color);
-            border-radius: 4px;
-            display: inline-block;
-            min-width: 200px;
-            text-align: center;
-            cursor: pointer;
-            background-color: var(--input-bg);
-            color: var(--accent-color);
-        }
-        .dataset-name:hover {
-            background-color: #333;
-        }
-        .generator-button {
-            display: block;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-            text-decoration: none;
-            color: var(--text-color);
-            border: 1px solid transparent;
-            transition: all 0.2s;
-        }
-        .generator-button:hover, .generator-button.active {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-color: var(--border-color);
-        }
-        .generator-button.active {
-            color: var(--accent-color);
-            border-left: 3px solid var(--accent-color);
-        }
-        .generator-options {
-            background-color: var(--panel-bg);
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            border: 1px solid var(--border-color);
-        }
-        .form-group {
-            margin-bottom: 12px;
-        }
-        .form-label {
-            display: block;
-            margin-bottom: 4px;
-            color: #aaa;
-            font-size: 13px;
-        }
-        .form-select, .form-input {
-            width: 100%;
-            padding: 8px 10px;
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            font-family: 'Consolas', 'Monaco', monospace;
-        }
-        .form-select {
-            cursor: pointer;
-        }
-        .form-select:focus, .form-input:focus {
-            border-color: var(--accent-color);
-            outline: none;
-        }
-        .options-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 10px;
-        }
-        .generate-btn {
-            background-color: var(--button-color);
-            color: var(--text-color);
-            padding: 10px 15px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.2s;
-            font-family: 'Consolas', 'Monaco', monospace;
-        }
-        .generate-btn:hover:not(:disabled) {
-            background-color: var(--button-hover);
-        }
-        .generate-btn:disabled {
-            background-color: var(--disabled-color);
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        .maps-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .map-card {
-            background-color: var(--panel-bg);
-            border-radius: 4px;
-            padding: 10px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            border: 1px solid var(--border-color);
-        }
-        .map-image {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid var(--border-color);
-            background-color: #222;
-        }
-        .map-info {
-            margin-top: 8px;
-            font-size: 12px;
-            color: #aaa;
-        }
-        .section-title {
-            font-size: 18px;
-            margin-bottom: 12px;
-            color: var(--accent-color);
-            display: flex;
-            align-items: center;
-        }
-        .section-title::before {
-            content: ">";
-            margin-right: 8px;
-            color: var(--success-color);
-        }
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-        }
-        .checkbox-container input {
-            margin-right: 8px;
-        }
-        .back-btn {
-            display: inline-block;
-            margin-bottom: 15px;
-            padding: 6px 12px;
-            background-color: transparent;
-            color: var(--accent-color);
-            text-decoration: none;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            transition: background-color 0.2s;
-            font-size: 13px;
-        }
-        .back-btn:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-        .loading {
-            text-align: center;
-            padding: 15px;
-            font-style: italic;
-            color: #999;
-        }
-        .loading::before {
-            content: "> ";
-            color: var(--success-color);
-        }
-        h3 {
-            font-size: 16px;
-            margin-top: 20px;
-            margin-bottom: 12px;
-            color: #aaa;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dataset_builder_styles.css') }}">
 </head>
 <body>
     <div class="container">
@@ -244,66 +24,78 @@
         <div class="main-content">
             <div class="dataset-name-container">
                 <div class="dataset-name" id="dataset-name">{{ dataset_name }}</div>
+                <div class="keyboard-hint">Press 'G' to toggle dataset configuration panel</div>
             </div>
             
-            <div class="generator-options">
-                <div class="section-title">{{ generator_info.name }} Generator</div>
+            <div class="content-columns">
+                <div class="column">
+                    <div class="column-title">{{ generator_info.name }} Generator</div>
                 <form id="generator-form">
                     <input type="hidden" name="generator_type" value="{{ current_generator }}">
                     
-                    <div class="options-grid">
-                        <div class="form-group">
-                            <label class="form-label">Maze Size</label>
-                            <select name="size" class="form-select" id="maze-size">
-                                {% for size in maze_sizes %}
-                                <option value="{{ size.width }},{{ size.height }}" {% if size.width == 21 %}selected{% endif %}>
-                                    {{ size.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <input type="hidden" name="width" id="width-input" value="21">
-                            <input type="hidden" name="height" id="height-input" value="21">
-                        </div>
-                        
-                        {% for param_name, param_info in generator_info.params.items() %}
-                        <div class="form-group">
-                            <label class="form-label">{{ param_info.label }}</label>
-                            <input 
-                                type="{{ param_info.type }}" 
-                                name="{{ param_name }}" 
-                                class="form-input" 
-                                value="{{ param_info.default }}" 
-                                min="{{ param_info.min }}" 
-                                max="{{ param_info.max }}" 
-                                step="{{ param_info.step }}"
-                            >
-                        </div>
-                        {% endfor %}
-                        
-                        <div class="form-group">
-                            <label class="form-label">Number of Maps</label>
-                            <select name="num_samples" class="form-select">
-                                <option value="4">4 maps</option>
-                                <option value="8" selected>8 maps</option>
-                                <option value="12">12 maps</option>
-                                <option value="16">16 maps</option>
-                            </select>
-                        </div>
+                            <div class="options-grid">
+                    <div class="form-group">
+                                    <label class="form-label">Maze Size</label>
+                        <select name="size" class="form-select" id="maze-size">
+                            {% for size in maze_sizes %}
+                            <option value="{{ size.width }},{{ size.height }}" {% if size.width == 21 %}selected{% endif %}>
+                                {{ size.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="width" id="width-input" value="21">
+                        <input type="hidden" name="height" id="height-input" value="21">
+                    </div>
+                    
+                    {% for param_name, param_info in generator_info.params.items() %}
+                    <div class="form-group">
+                                    <label class="form-label">{{ param_info.label }}</label>
+                        <input 
+                            type="{{ param_info.type }}" 
+                            name="{{ param_name }}" 
+                            class="form-input" 
+                            value="{{ param_info.default }}" 
+                            min="{{ param_info.min }}" 
+                            max="{{ param_info.max }}" 
+                            step="{{ param_info.step }}"
+                        >
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="form-group">
+                                    <label class="form-label">Number of Maps</label>
+                        <select name="num_samples" class="form-select">
+                            <option value="4">4 maps</option>
+                            <option value="8" selected>8 maps</option>
+                            <option value="12">12 maps</option>
+                            <option value="16">16 maps</option>
+                        </select>
+                                </div>
                     </div>
                     
                     <div class="checkbox-container">
                         <input type="checkbox" name="ensure_connected" id="ensure-connected" checked>
-                        <label for="ensure-connected">Ensure all mazes are fully connected</label>
+                                <label for="ensure-connected">Ensure all mazes are fully connected</label>
                     </div>
                     
-                    <div style="margin-top: 15px;">
-                        <button type="submit" class="generate-btn" id="generate-btn">./generate_maps</button>
+                    <div class="checkbox-container">
+                        <input type="checkbox" name="ensure_unique" id="ensure-unique" checked>
+                                <label for="ensure-unique">Ensure all mazes are unique</label>
+                    </div>
+                    
+                            <div style="margin-top: 15px;">
+                                <button type="submit" class="generate-btn" id="generate-btn">./generate_maps</button>
                     </div>
                 </form>
+                </div>
+                
+                <div class="column" id="config-column">
+                    {% include 'dataset_builder/dataset_configurator.html' %}
+                </div>
             </div>
             
             <div id="loading" class="loading" style="display: none;">
-                Processing: Generating mazes, please wait...
+                        Processing: Generating mazes, please wait...
             </div>
             
             <div id="maps-container" class="maps-container">
@@ -312,8 +104,14 @@
         </div>
     </div>
     
+    <script src="{{ url_for('static', filename='generator_config.js') }}"></script>
     <script>
-        // Handle dataset name editing
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize config column visibility
+            const configColumn = document.getElementById('config-column');
+            configColumn.style.display = 'block'; // Start with panel visible
+            
+            // Handle dataset name editing
         const datasetNameElem = document.getElementById('dataset-name');
         datasetNameElem.addEventListener('click', function() {
             const currentName = this.textContent;
@@ -335,36 +133,138 @@
                     }
                 });
             }
-        });
-        
-        // Handle maze size selection
-        const mazeSizeSelect = document.getElementById('maze-size');
-        const widthInput = document.getElementById('width-input');
-        const heightInput = document.getElementById('height-input');
-        
-        mazeSizeSelect.addEventListener('change', function() {
-            const [width, height] = this.value.split(',');
+            });
+            
+            // Add keyboard shortcut to toggle dataset configuration panel
+            document.addEventListener('keydown', function(event) {
+                // Check if key pressed is 'g' or 'G' (case insensitive)
+                if (event.key.toLowerCase() === 'g') {
+                    // Ignore if user is typing in input fields, textareas, or other form elements
+                    if (event.target.tagName === 'INPUT' || 
+                        event.target.tagName === 'TEXTAREA' || 
+                        event.target.tagName === 'SELECT' || 
+                        event.target.isContentEditable) {
+                        return;
+                    }
+                    
+                    // Prevent default behavior if needed
+                    event.preventDefault();
+                    
+                    // Get the dataset configuration panel container
+                    const configColumn = document.getElementById('config-column');
+                    
+                    // Toggle visibility
+                    if (configColumn.style.display === 'none') {
+                        configColumn.style.display = 'block';
+                        
+                        // Show feedback notification
+                        showNotification('Dataset Configuration Shown', 'Press G to hide the panel again.');
+                    } else {
+                        configColumn.style.display = 'none';
+                        
+                        // Show feedback notification
+                        showNotification('Dataset Configuration Hidden', 'Press G to show the panel again.');
+                    }
+                }
+            });
+            
+            // Function to show a temporary notification
+            function showNotification(title, message) {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = 'keyboard-notification';
+                notification.innerHTML = `
+                    <div class="notification-title">${title}</div>
+                    <div class="notification-message">${message}</div>
+                `;
+                
+                // Add to document
+                document.body.appendChild(notification);
+                
+                // Animate in
+                setTimeout(() => {
+                    notification.classList.add('visible');
+                }, 10);
+                
+                // Remove after delay
+                setTimeout(() => {
+                    notification.classList.remove('visible');
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 2000);
+            }
+            
+            // Synchronize connectivity checkboxes
+            const ensureConnectedGlobal = document.getElementById('ensure-connected-global');
+            const ensureConnected = document.getElementById('ensure-connected');
+            
+            if (ensureConnectedGlobal && ensureConnected) {
+                // Set initial state
+                ensureConnectedGlobal.checked = ensureConnected.checked;
+                
+                // Sync when global checkbox changes
+                ensureConnectedGlobal.addEventListener('change', function() {
+                    ensureConnected.checked = this.checked;
+                });
+                
+                // Sync when individual checkbox changes
+                ensureConnected.addEventListener('change', function() {
+                    ensureConnectedGlobal.checked = this.checked;
+                });
+            }
+            
+            // Synchronize uniqueness checkboxes
+            const ensureUniqueGlobal = document.getElementById('ensure-unique-global');
+            const ensureUnique = document.getElementById('ensure-unique');
+            
+            if (ensureUniqueGlobal && ensureUnique) {
+                // Set initial state
+                ensureUniqueGlobal.checked = ensureUnique.checked;
+                
+                // Sync when global checkbox changes
+                ensureUniqueGlobal.addEventListener('change', function() {
+                    ensureUnique.checked = this.checked;
+                });
+                
+                // Sync when individual checkbox changes
+                ensureUnique.addEventListener('change', function() {
+                    ensureUniqueGlobal.checked = this.checked;
+                });
+            }
+            
+            // Handle maze size selection
+            const mazeSizeSelect = document.getElementById('maze-size');
+            const widthInput = document.getElementById('width-input');
+            const heightInput = document.getElementById('height-input');
+            
+            mazeSizeSelect.addEventListener('change', function() {
+                const [width, height] = this.value.split(',');
+                widthInput.value = width;
+                heightInput.value = height;
+            });
+            
+            // Initialize size inputs
+            const [width, height] = mazeSizeSelect.value.split(',');
             widthInput.value = width;
             heightInput.value = height;
-        });
-        
-        // Initialize size inputs
-        const [width, height] = mazeSizeSelect.value.split(',');
-        widthInput.value = width;
-        heightInput.value = height;
-        
-        // Handle form submission
-        document.getElementById('generator-form').addEventListener('submit', function(e) {
+            
+            // Handle form submission
+            document.getElementById('generator-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const formData = new FormData(this);
             const mapsContainer = document.getElementById('maps-container');
             const loading = document.getElementById('loading');
-            const generateBtn = document.getElementById('generate-btn');
+                    const generateBtn = document.getElementById('generate-btn');
+                    
+                    // Disable the generate button
+                    generateBtn.disabled = true;
+                    generateBtn.textContent = 'Generating...';
             
-            // Disable the generate button
-            generateBtn.disabled = true;
-            generateBtn.textContent = 'Generating...';
+            // Clear any existing deduplication info
+            const existingInfos = document.querySelectorAll('.deduplication-info');
+            existingInfos.forEach(info => info.remove());
             
             // Show loading indicator
             loading.style.display = 'block';
@@ -373,6 +273,10 @@
             // Add the ensure_connected value
             const ensureConnected = document.getElementById('ensure-connected').checked;
             formData.set('ensure_connected', ensureConnected ? 'true' : 'false');
+            
+            // Add the ensure_unique value
+            const ensureUnique = document.getElementById('ensure-unique').checked;
+            formData.set('ensure_unique', ensureUnique ? 'true' : 'false');
             
             // Send request to generate maps
             fetch('/generate_maps', {
@@ -384,6 +288,35 @@
                 loading.style.display = 'none';
                 
                 if (data.success) {
+                    // Check if we have deduplication info to display
+                    if (data.deduplication_info && data.deduplication_info.enabled) {
+                        const deduplicationInfo = data.deduplication_info;
+                        
+                        // Create deduplication info element
+                        const infoElement = document.createElement('div');
+                        infoElement.className = 'deduplication-info';
+                        infoElement.style.margin = '15px 0';
+                        infoElement.style.padding = '10px 15px';
+                        infoElement.style.backgroundColor = 'rgba(100, 181, 246, 0.1)';
+                        infoElement.style.border = '1px solid var(--accent-color)';
+                        infoElement.style.borderRadius = '4px';
+                        
+                        // Create info content
+                        let infoContent = `<div style="font-weight:bold;margin-bottom:5px;">Deduplication Results:</div>`;
+                        infoContent += `<div>Total mazes generated: ${deduplicationInfo.total_generated}</div>`;
+                        infoContent += `<div>Duplicates removed: ${deduplicationInfo.duplicates_removed}</div>`;
+                        infoContent += `<div>Unique mazes: ${data.maps.length}</div>`;
+                        
+                        if (deduplicationInfo.note) {
+                            infoContent += `<div style="color:#f9a825;margin-top:5px;"><strong>Note:</strong> ${deduplicationInfo.note}</div>`;
+                        }
+                        
+                        infoElement.innerHTML = infoContent;
+                        
+                        // Add info element before the maps container
+                        mapsContainer.parentNode.insertBefore(infoElement, mapsContainer);
+                    }
+                    
                     // Display the generated maps
                     data.maps.forEach(map => {
                         const mapCard = document.createElement('div');
@@ -403,33 +336,34 @@
                         mapsContainer.appendChild(mapCard);
                     });
                 } else {
-                    // Show error in loading area instead of alert
-                    loading.textContent = 'Error: ' + data.error;
-                    loading.style.color = 'var(--error-color)';
-                    loading.style.display = 'block';
-                    setTimeout(() => {
-                        loading.style.color = '#999';
-                    }, 3000);
-                }
-                
-                // Re-enable the generate button
-                generateBtn.disabled = false;
-                generateBtn.textContent = './generate_maps';
+                            // Show error in loading area instead of alert
+                            loading.textContent = 'Error: ' + data.error;
+                            loading.style.color = 'var(--error-color)';
+                            loading.style.display = 'block';
+                            setTimeout(() => {
+                                loading.style.color = '#999';
+                            }, 3000);
+                        }
+                        
+                        // Re-enable the generate button
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = './generate_maps';
             })
             .catch(error => {
-                loading.style.display = 'block';
-                loading.textContent = 'Error: ' + error.message;
-                loading.style.color = 'var(--error-color)';
+                        loading.style.display = 'block';
+                        loading.textContent = 'Error: ' + error.message;
+                        loading.style.color = 'var(--error-color)';
                 console.error('Error:', error);
-                
-                // Re-enable the generate button
-                generateBtn.disabled = false;
-                generateBtn.textContent = './generate_maps';
-                
-                setTimeout(() => {
-                    loading.style.color = '#999';
-                }, 3000);
-            });
+                        
+                        // Re-enable the generate button
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = './generate_maps';
+                        
+                        setTimeout(() => {
+                            loading.style.color = '#999';
+                        }, 3000);
+                    });
+                });
         });
     </script>
 </body>

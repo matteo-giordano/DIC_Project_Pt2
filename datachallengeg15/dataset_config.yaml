@@ -1,0 +1,53 @@
+ensure_connected: true
+ensure_unique: true
+generators:
+  gaussian:
+    count_per_config: 10
+    height:
+    - 21
+    sigma_x:
+    - 1
+    sigma_y:
+    - 1
+    threshold:
+    - 0.5
+    width:
+    - 21
+  manual:
+    count_per_config: 10
+  prim:
+    count_per_config: 10
+    height:
+    - 21
+    width:
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+    - 21
+  recursive:
+    count_per_config: 10
+    height:
+    - 21
+    width:
+    - 21
+  terrain:
+    blob_density:
+    - 0.005
+    count_per_config: 10
+    height:
+    - 21
+    width:
+    - 21
+  wilson:
+    count_per_config: 10
+    height:
+    - 21
+    width:
+    - 21
+name: chico

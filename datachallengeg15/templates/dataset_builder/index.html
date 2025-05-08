@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,56 +114,13 @@
             content: "$ ";
             color: var(--success-color);
         }
-        
-        /* Notification styling */
-        .notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            padding: 15px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-            animation: slide-in 0.3s ease-out;
-        }
-        
-        @keyframes slide-in {
-            0% { transform: translateX(100%); opacity: 0; }
-            100% { transform: translateX(0); opacity: 1; }
-        }
-        
-        .notification-content {
-            width: 300px;
-        }
-        
-        .notification-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: var(--accent-color);
-            margin-bottom: 8px;
-        }
-        
-        .notification-text {
-            font-size: 14px;
-            margin-bottom: 12px;
-            word-break: break-all;
-        }
-        
-        .notification-actions {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-        }
-        
-        .btn.secondary {
-            background-color: transparent;
-            border: 1px solid var(--button-color);
-        }
-        
-        .btn.secondary:hover {
-            background-color: rgba(255, 255, 255, 0.05);
+        .error-message {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--error-color);
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--error-color);
         }
     </style>
 </head>
@@ -174,6 +130,12 @@
             <h1>// Maze Dataset Builder</h1>
             <p>Generate, visualize, and manage maze datasets for AI training</p>
         </div>
+        
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
         
         <div class="terminal-text">Select an option to continue...</div>
         
@@ -193,79 +155,36 @@
                 <div class="action-description">
                     Load and visualize an existing dataset from a folder path.
                 </div>
-                <input type="text" placeholder="/path/to/dataset" id="dataset-path">
-                <a href="#" class="btn" id="load-btn">./load_dataset</a>
+                <form id="load-dataset-form" action="/load_dataset" method="post">
+                    <input type="text" name="dataset_path" placeholder="/path/to/dataset" id="dataset-path">
+                    <button type="submit" class="btn" id="load-btn">./load_dataset</button>
+                </form>
             </div>
         </div>
     </div>
     
     <script>
-        document.getElementById('load-btn').addEventListener('click', function() {
-            const path = document.getElementById('dataset-path').value;
-            if (path) {
-                this.classList.add('disabled');
-                this.textContent = "Loading...";
-                setTimeout(() => {
-                    alert('Load dataset functionality not implemented yet.
-Path: ' + path);
-                    this.classList.remove('disabled');
-                    this.textContent = "./load_dataset";
-                }, 500);
-            } else {
-                const inputEl = document.getElementById('dataset-path');
-                inputEl.style.borderColor = 'var(--error-color)';
-                setTimeout(() => {
-                    inputEl.style.borderColor = 'var(--input-border)';
-                }, 1500);
-            }
-        });
-        
-        // Check for a recently generated dataset path in localStorage
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if there's a dataset path in localStorage
             const lastDatasetPath = localStorage.getItem('lastDatasetPath');
             if (lastDatasetPath) {
-                // Show a notification
-                const notificationEl = document.createElement('div');
-                notificationEl.className = 'notification';
-                notificationEl.innerHTML = `
-                    <div class="notification-content">
-                        <div class="notification-title">Dataset Generated!</div>
-                        <div class="notification-text">Your dataset was created at: ${lastDatasetPath}</div>
-                        <div class="notification-actions">
-                            <button class="btn" id="load-generated-dataset">Load Dataset</button>
-                            <button class="btn secondary" id="dismiss-notification">Dismiss</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(notificationEl);
-                
-                // Add button handlers
-                document.getElementById('load-generated-dataset').addEventListener('click', function() {
-                    // Set the path in the input and submit
-                    document.getElementById('dataset-path').value = lastDatasetPath;
-                    // Remove from localStorage
-                    localStorage.removeItem('lastDatasetPath');
-                    // Remove notification
-                    notificationEl.remove();
-                    
-                    // Submit the form to load the dataset
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/load_dataset';
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'dataset_path';
-                    input.value = lastDatasetPath;
-                    form.appendChild(input);
-                    document.body.appendChild(form);
-                    form.submit();
-                });
-                
-                document.getElementById('dismiss-notification').addEventListener('click', function() {
-                    localStorage.removeItem('lastDatasetPath');
-                    notificationEl.remove();
-                });
+                document.getElementById('dataset-path').value = lastDatasetPath;
             }
+            
+            document.getElementById('load-dataset-form').addEventListener('submit', function(e) {
+                const path = document.getElementById('dataset-path').value;
+                if (!path) {
+                    e.preventDefault();
+                    const inputEl = document.getElementById('dataset-path');
+                    inputEl.style.borderColor = 'var(--error-color)';
+                    setTimeout(() => {
+                        inputEl.style.borderColor = 'var(--input-border)';
+                    }, 1500);
+                } else {
+                    document.getElementById('load-btn').textContent = "Loading...";
+                    document.getElementById('load-btn').disabled = true;
+                }
+            });
         });
     </script>
 </body>
