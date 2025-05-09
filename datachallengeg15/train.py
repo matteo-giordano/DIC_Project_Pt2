@@ -6,17 +6,16 @@ from tqdm import tqdm
 
 
 class Trainer:
-    def __init__(self, agent_cls, dataset: Dataset, reward_fn: callable, agent_kwargs: dict = {}):
+    def __init__(self, agent_cls, reward_fn: callable, agent_kwargs: dict = {}):
         self.agent_cls = agent_cls
-        self.dataset = dataset
         self.agent = None
         self.reward_fn = reward_fn
         self.agent_kwargs = agent_kwargs
 
-    def train_on_dataset(self, episodes: int):
-        for i in tqdm(range(len(self.dataset.maps))):
+    def train_on_dataset(self, dataset: Dataset, episodes: int):
+        for i in tqdm(range(len(dataset.maps))):
             raise NotImplementedError("Not implemented")
-            grid = self.dataset.maps[i]
+            grid = dataset.maps[i]
             self.train_on_map(grid, episodes)
 
 
