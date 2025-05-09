@@ -476,13 +476,26 @@ class Dataset:
             else:
                 print(f"Invalid map index {index}")
                 return 0
-        
+        else:
+            # Process all maps
+            total_removed = 0
+            print(f"Ensuring connectivity for {len(self.maps)} maps...")
+            for i, maze in enumerate(self.maps):
+                if maze is not None:
+                    removed = self._ensure_single_map_connectivity(maze)
+                    total_removed += removed
+                    if removed > 0:
+                        print(f"Removed {removed} obstacles from map {i}")
+            
+            print(f"Total obstacles removed: {total_removed}")
+            return total_removed
         
     def _ensure_single_map_connectivity(self, maze: np.ndarray) -> int:
         """
         Ensures connectivity in a single map by removing obstacles until 
         all empty spaces form a single connected component.
         Only removes the minimum number of obstacles necessary.
+        Preserves all border walls by excluding them from the connectivity process.
         
         Args:
             maze (np.ndarray): The maze to process
@@ -493,8 +506,15 @@ class Dataset:
         height, width = maze.shape
         removed_count = 0
         
-        # Get all components
-        components, total_components = self._get_connected_components(maze)
+        # If the maze is too small to have an inner area, return
+        if height <= 2 or width <= 2:
+            return 0
+        
+        # Create a working copy of the maze excluding the border
+        inner_maze = maze[1:-1, 1:-1].copy()
+        
+        # Get all components in the inner maze
+        components, total_components = self._get_connected_components(inner_maze)
         
         # If already connected, nothing to do
         if total_components <= 1:
@@ -511,8 +531,8 @@ class Dataset:
         for y, x in merged_component:
             for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 ny, nx = y + dy, x + dx
-                if (0 <= ny < height and 0 <= nx < width and 
-                    maze[ny, nx] == 1):  # It's a wall
+                if (0 <= ny < height-2 and 0 <= nx < width-2 and 
+                    inner_maze[ny, nx] == 1):  # It's a wall
                     adjacent_obstacles.add((ny, nx))
         
         # Process smaller components one by one
@@ -522,8 +542,8 @@ class Dataset:
             for y, x in component:
                 for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     ny, nx = y + dy, x + dx
-                    if (0 <= ny < height and 0 <= nx < width and 
-                        maze[ny, nx] == 1):  # It's a wall
+                    if (0 <= ny < height-2 and 0 <= nx < width-2 and 
+                        inner_maze[ny, nx] == 1):  # It's a wall
                         component_obstacles.add((ny, nx))
             
             # Find the best obstacle to remove (one that is adjacent to both components)
@@ -535,7 +555,7 @@ class Dataset:
                 
                 # Remove the obstacle
                 y, x = obstacle
-                maze[y, x] = 0
+                inner_maze[y, x] = 0
                 removed_count += 1
                 
                 # Update merged component and adjacent obstacles
@@ -549,8 +569,8 @@ class Dataset:
                 for cy, cx in component:
                     for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         ny, nx = cy + dy, cx + dx
-                        if (0 <= ny < height and 0 <= nx < width and 
-                            maze[ny, nx] == 1):  # It's a wall
+                        if (0 <= ny < height-2 and 0 <= nx < width-2 and 
+                            inner_maze[ny, nx] == 1):  # It's a wall
                             adjacent_obstacles.add((ny, nx))
             else:
                 # No direct connection found, find the shortest path
@@ -573,8 +593,8 @@ class Dataset:
                     if abs(y1 - y2) == 2 and x1 == x2:  # Cells separated by one wall vertically
                         wall_y = (y1 + y2) // 2
                         wall_x = x1
-                        if maze[wall_y, wall_x] == 1:
-                            maze[wall_y, wall_x] = 0
+                        if inner_maze[wall_y, wall_x] == 1:
+                            inner_maze[wall_y, wall_x] = 0
                             removed_count += 1
                             merged_component.add((wall_y, wall_x))
                             merged_component.add((y1, x1))
@@ -584,8 +604,8 @@ class Dataset:
                     elif abs(x1 - x2) == 2 and y1 == y2:  # Cells separated by one wall horizontally
                         wall_y = y1
                         wall_x = (x1 + x2) // 2
-                        if maze[wall_y, wall_x] == 1:
-                            maze[wall_y, wall_x] = 0
+                        if inner_maze[wall_y, wall_x] == 1:
+                            inner_maze[wall_y, wall_x] = 0
                             removed_count += 1
                             merged_component.add((wall_y, wall_x))
                             merged_component.add((y1, x1))
@@ -601,16 +621,16 @@ class Dataset:
                     # Move horizontally first
                     while current_x != x2:
                         current_x += 1 if current_x < x2 else -1
-                        if maze[current_y, current_x] == 1:  # It's a wall
-                            maze[current_y, current_x] = 0
+                        if inner_maze[current_y, current_x] == 1:  # It's a wall
+                            inner_maze[current_y, current_x] = 0
                             removed_count += 1
                         merged_component.add((current_y, current_x))
                     
                     # Then move vertically
                     while current_y != y2:
                         current_y += 1 if current_y < y2 else -1
-                        if maze[current_y, current_x] == 1:  # It's a wall
-                            maze[current_y, current_x] = 0
+                        if inner_maze[current_y, current_x] == 1:  # It's a wall
+                            inner_maze[current_y, current_x] = 0
                             removed_count += 1
                         merged_component.add((current_y, current_x))
                     
@@ -622,12 +642,12 @@ class Dataset:
                     for y, x in merged_component:
                         for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                             ny, nx = y + dy, x + dx
-                            if (0 <= ny < height and 0 <= nx < width and 
-                                maze[ny, nx] == 1):  # It's a wall
+                            if (0 <= ny < height-2 and 0 <= nx < width-2 and 
+                                inner_maze[ny, nx] == 1):  # It's a wall
                                 adjacent_obstacles.add((ny, nx))
         
         # Verify that all empty spaces are now connected
-        new_components, total_new_components = self._get_connected_components(maze)
+        new_components, total_new_components = self._get_connected_components(inner_maze)
         
         if total_new_components > 1:
             # If we still have multiple components, we need to be more aggressive
@@ -655,24 +675,27 @@ class Dataset:
                     # Move horizontally first
                     while current_x != x2:
                         current_x += 1 if current_x < x2 else -1
-                        if maze[current_y, current_x] == 1:  # It's a wall
-                            maze[current_y, current_x] = 0
+                        if inner_maze[current_y, current_x] == 1:  # It's a wall
+                            inner_maze[current_y, current_x] = 0
                             removed_count += 1
                     
                     # Then move vertically
                     while current_y != y2:
                         current_y += 1 if current_y < y2 else -1
-                        if maze[current_y, current_x] == 1:  # It's a wall
-                            maze[current_y, current_x] = 0
+                        if inner_maze[current_y, current_x] == 1:  # It's a wall
+                            inner_maze[current_y, current_x] = 0
                             removed_count += 1
                     
                     # Update merged component with connected component
                     merged_component.update(component)
             
             # Final verification
-            _, total_final_components = self._get_connected_components(maze)
+            _, total_final_components = self._get_connected_components(inner_maze)
             if total_final_components > 1:
                 print(f"Warning: Still have {total_final_components} components after aggressive connection.")
+        
+        # Apply changes from inner_maze back to the original maze
+        maze[1:-1, 1:-1] = inner_maze
         
         return removed_count
     
