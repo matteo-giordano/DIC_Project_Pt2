@@ -1,5 +1,7 @@
 import numpy as np
 import networkx as nx
+from collections import defaultdict
+
 
 class Grid:
     def __init__(self, array: np.ndarray, start_cell: tuple[int, int]):
@@ -12,6 +14,7 @@ class Grid:
         self.target_cell = tuple(np.argwhere(array == 3)[0][::-1])
         self.start_cell = start_cell
         self.agent_cell = start_cell
+        self.visit_count = defaultdict(int)
         self.graph = self.build_graph()
 
     def validate_array(self, array: np.ndarray):
@@ -28,12 +31,14 @@ class Grid:
         # 0: Move down, 1: Move up, 2: Move left, 3: Move right
         assert self.array[action] != 1, "Invalid action"
         self.agent_cell = action
+        self.visit_count[action] += 1
 
     def is_done(self):
         return self.agent_cell == self.target_cell
     
     def reset(self):
         self.agent_cell = self.start_cell
+        self.visit_count = defaultdict(int)
         return self.agent_cell
 
     def build_graph(self):

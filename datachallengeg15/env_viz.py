@@ -56,6 +56,7 @@ def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goa
 
     # Centered path
     path = agent.extract_policy_path(start, goal)
+
     if path:
         px, py = zip(*[(x + 0.5, y + 0.5) for (x, y) in path])
         ax.plot(px, py, color='red', linewidth=2, marker='o', markersize=3)
