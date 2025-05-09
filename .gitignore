@@ -1,2 +1,5 @@
 __pycache__/
-world/__pycache__
+datachallengeg15/datasets/
+datachallengeg15/__pycache__/
+.mypy_cache/
+
