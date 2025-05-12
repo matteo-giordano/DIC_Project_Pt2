@@ -278,3 +278,80 @@ visualize_q_values(agent, grid, start_cell, goal_cell)
 ```
 
 This shows a heatmap of Q-values and the optimal path extracted from the agent's policy.
+
+## Hyperparameter Optimization (HPO)
+
+The framework includes a hyperparameter optimization module (`hpo.py`) that allows for efficient tuning of agent parameters using random search with parallel execution.
+
+### Features
+
+- **Random Search**: Efficiently explores the parameter space by randomly sampling parameter combinations
+- **Parallel Execution**: Runs multiple trials concurrently to speed up the optimization process
+- **Multiple Seeds**: Tests each parameter combination with multiple random seeds for robust evaluation
+- **Configurable via YAML**: All settings controlled through a simple YAML configuration file
+
+### Usage
+
+```python
+from hpo import HPO
+
+# Create and run an HPO experiment using a config file
+hpo = HPO("ql-hpo.yaml")
+results_df = hpo.run_experiment()
+```
+
+### YAML Configuration Format
+
+The HPO module uses YAML configuration files to define the experiment parameters. Here's an example:
+
+```yaml
+# Agent configuration
+algorithm: TabularQLearningAgent  # Agent class name
+reward_fn: reward_fn              # Reward function to use
+
+# Environment configuration
+map: path/to/grid_map.npy         # Path to the maze map file
+start_cell: [11, 3]               # Starting position [y, x]
+
+# Training parameters
+max_episodes: 10_000              # Maximum episodes per trial
+max_steps: 10_000                 # Maximum steps per episode
+early_stopping_threshold: 500     # Stop if target reached consistently
+
+# HPO parameters
+max_workers: 10                   # Number of parallel processes
+n_trials: 500                     # Number of random parameter combinations to try
+n_seeds: 10                       # Number of random seeds per parameter combination
+
+# Parameter ranges to search (min and max values)
+algorithm_params:
+    "epsilon": [0.01, 0.99]       # Exploration rate range
+    "gamma": [0.01, 0.99]         # Discount factor range
+    # Add other parameters as needed
+```
+
+### Results
+
+The HPO process saves results to a CSV file containing:
+- All parameter values for each trial
+- Random seed used
+- Number of training iterations required
+- Optimal path length found
+- Whether a valid path was discovered
+
+Results are saved with a timestamp in the filename for easy tracking:
+```
+TabularQLearningAgent_A1_grid_reward_fn_23_12-45.csv
+```
+
+### Example: Running Hyperparameter Optimization
+
+```python
+# Run HPO experiment
+hpo = HPO("ql-hpo.yaml")
+results = hpo.run_experiment()
+
+# Analyze results
+best_params = results.loc[results["iters"].idxmin()]
+print(f"Best parameters: {best_params}")
+```
