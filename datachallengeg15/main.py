@@ -11,7 +11,7 @@ def main():
     random.seed(12369)
     np.random.seed(12369)
 
-        # Choose agent
+    # Choose agent
     agent = MonteCarloAgent
     agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.999, "epsilon_min": 0.1}
     
