@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np 
 import networkx as nx
 import random
+from collections import defaultdict
 
 
 class BaseAgent(ABC):
@@ -87,4 +88,86 @@ class TabularQLearningAgent(BaseAgent):
         return path
         
         
+
+class MonteCarloAgent(BaseAgent):
+    def __init__(self, graph: nx.Graph, epsilon: float = 0.1, gamma: float = 0.99):
+        """
+        Monte Carlo Control Agent using on-policy first-visit method with epsilon-soft policy.
+        """
+        self.graph = graph
+        self.epsilon = epsilon
+        self.gamma = gamma
+
+        # Q-value table: Q[state][action] = value
+        self.q_table = {}
+
+        # For tracking returns for averaging
+        self.returns = defaultdict(list)  # returns[(state, action)]
+
+        # To store episode trajectory
+        self.episode = []
+
+    def get_action(self, state):
+        """Get available actions from the current state."""
+        return list(self.graph.neighbors(state))
+    
+    def get_q(self, state, action):
+        """Get Q-value for a state-action pair."""
+        return self.q_table.get((state, action), 0.0)
+
+    def take_action(self, state):
+        """Choose an action according to the current epsilon-greedy policy."""
+        actions = self.get_action(state)
+        if not actions:
+            return None
             
+        # Epsilon-greedy action selection
+        if np.random.rand() < self.epsilon:
+            return random.choice(actions)
+        
+        # Greedy action selection
+        q_values = [self.get_q(state, a) for a in actions]
+        max_q = max(q_values)
+        best_actions = [a for a, q in zip(actions, q_values) if q == max_q]
+        return random.choice(best_actions)
+
+    def update(self, state, action, reward, next_state):
+        """Append to the episode buffer. Called every step."""
+        self.episode.append((state, action, reward))
+
+    def end_episode(self):
+        """Called after the episode ends. Perform Monte Carlo updates."""
+        G = 0
+        visited = set()
+
+        for t in reversed(range(len(self.episode))):
+            state, action, reward = self.episode[t]
+            G = self.gamma * G + reward
+
+            if (state, action) not in visited:
+                visited.add((state, action))
+                self.returns[(state, action)].append(G)
+                self.q_table[(state, action)] = np.mean(self.returns[(state, action)])
+
+        # Clear the episode buffer
+        self.episode.clear()
+        
+    def extract_policy_path(self, start, end, max_steps=1000):
+        """Extract the best policy path from start to end."""
+        state = start
+        path = [state]
+        visited = set()
+        for _ in range(max_steps):
+            if state == end:
+                break
+            actions = self.get_action(state)
+            if not actions:
+                break
+            q_values = [self.get_q(state, a) for a in actions]
+            best_action = actions[np.argmax(q_values)]
+            if best_action in visited:
+                break
+            visited.add(best_action)
+            state = best_action
+            path.append(state)
+        return path

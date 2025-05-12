@@ -6,11 +6,12 @@ from tqdm import tqdm
 
 
 class Trainer:
-    def __init__(self, agent_cls, reward_fn: callable, agent_kwargs: dict = {}):
+    def __init__(self, agent_cls, reward_fn: callable, agent_kwargs: dict = {}, early_stopping_threshold: int = None):
         self.agent_cls = agent_cls
         self.agent = None
         self.reward_fn = reward_fn
         self.agent_kwargs = agent_kwargs
+        self.early_stopping_threshold = early_stopping_threshold
 
     def train_on_dataset(self, dataset: Dataset, episodes: int):
         for i in tqdm(range(len(dataset.maps))):
@@ -22,8 +23,28 @@ class Trainer:
     def train_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000):
         self.agent = self.agent_cls(grid.graph, **self.agent_kwargs)
         env = Environment(grid, self.reward_fn)
-        for _ in tqdm(range(episodes)):
+        
+        # Early stopping variables
+        unchanged_episodes = 0
+        prev_path = None
+        
+        for episode in tqdm(range(episodes)):
             self._run_episode(env, self.agent, max_steps)
+            
+            # Early stopping check
+            if self.early_stopping_threshold is not None:
+                # Get optimal path from start to end using agent's policy
+                current_path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
+                
+                if prev_path is not None and current_path == prev_path:
+                    unchanged_episodes += 1
+                    if unchanged_episodes >= self.early_stopping_threshold:
+                        print(f"Early stopping at episode {episode+1}: optimal path unchanged for {self.early_stopping_threshold} episodes")
+                        break
+                else:
+                    unchanged_episodes = 0
+                
+                prev_path = current_path
 
     def _run_episode(self, env: Environment, agent: BaseAgent, max_steps: int):
         state = env.reset()
@@ -37,7 +58,11 @@ class Trainer:
             state = next_state
             if done:
                 break
+        
+        # Call end_episode if the agent has this method (for Monte Carlo agent)
+        if hasattr(agent, 'end_episode'):
+            agent.end_episode()
+            
         return steps    
-
 
     
