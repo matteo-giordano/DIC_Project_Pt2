@@ -90,12 +90,15 @@ class TabularQLearningAgent(BaseAgent):
         
 
 class MonteCarloAgent(BaseAgent):
-    def __init__(self, graph: nx.Graph, epsilon: float = 0.1, gamma: float = 0.99):
+    def __init__(self, graph: nx.Graph, epsilon: float = 0.1, gamma: float = 0.99, epsilon_decay: float = 0.995, epsilon_min: float = 0.01):
         """
         Monte Carlo Control Agent using on-policy first-visit method with epsilon-soft policy.
         """
         self.graph = graph
         self.epsilon = epsilon
+        self.initial_epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
         self.gamma = gamma
 
         # Q-value table: Q[state][action] = value
@@ -151,6 +154,9 @@ class MonteCarloAgent(BaseAgent):
 
         # Clear the episode buffer
         self.episode.clear()
+        
+        # Decay epsilon
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
         
     def extract_policy_path(self, start, end, max_steps=1000):
         """Extract the best policy path from start to end."""

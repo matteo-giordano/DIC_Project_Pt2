@@ -53,4 +53,6 @@ class Grid:
                             G.add_edge((y, x), (ny_, nx_))
         return G
 
+    def __str__(self):
+        return f"Grid(shape={self.array.shape}, start_cell={self.start_cell}, target_cell={self.target_cell}). n_obstacles={np.sum(self.array == 1)}"
         

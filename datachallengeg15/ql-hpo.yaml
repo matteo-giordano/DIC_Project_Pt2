@@ -1,0 +1,19 @@
+algorithm: TabularQLearningAgent
+map: ../datachallengeg15/grid_configs/A1_grid.npy
+start_cell: [11, 3]
+max_episodes: 10_000
+max_steps: 10_000
+early_stopping_threshold: 500
+reward_fn: reward_fn
+max_workers: 10
+n_trials: 500
+n_seeds: 10
+algorithm_params:
+    "epsilon": [0.01, 0.99] # min, max range to be searched
+    "gamma": [0.01, 0.99] # min, max range to be searched
+ #   "epsilon_decay": [0.995, 0.999, 0.9999]
+ #   "epsilon_min": [0.1, 0.01, 0.001]
+
+
+
+

@@ -3,7 +3,6 @@ import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 from agent import BaseAgent
 from grid import Grid
-import numpy as np
 
 
 def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goal: tuple[int, int]):

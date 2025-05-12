@@ -16,9 +16,6 @@ class Trainer:
     def train_on_dataset(self, dataset: Dataset, episodes: int):
         for i in tqdm(range(len(dataset.maps))):
             raise NotImplementedError("Not implemented")
-            grid = dataset.maps[i]
-            self.train_on_map(grid, episodes)
-
 
     def train_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000):
         self.agent = self.agent_cls(grid.graph, **self.agent_kwargs)
@@ -28,7 +25,8 @@ class Trainer:
         unchanged_episodes = 0
         prev_path = None
         
-        for episode in tqdm(range(episodes)):
+        for episode in range(episodes):
+        # for episode in tqdm(range(episodes)):
             self._run_episode(env, self.agent, max_steps)
             
             # Early stopping check
@@ -39,12 +37,13 @@ class Trainer:
                 if prev_path is not None and current_path == prev_path:
                     unchanged_episodes += 1
                     if unchanged_episodes >= self.early_stopping_threshold:
-                        print(f"Early stopping at episode {episode+1}: optimal path unchanged for {self.early_stopping_threshold} episodes")
+                        # print(f"Early stopping at episode {episode+1}: optimal path unchanged for {self.early_stopping_threshold} episodes")
                         break
                 else:
                     unchanged_episodes = 0
                 
                 prev_path = current_path
+        return episode
 
     def _run_episode(self, env: Environment, agent: BaseAgent, max_steps: int):
         state = env.reset()
