@@ -8,15 +8,32 @@ from grid import Grid
 def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goal: tuple[int, int]):
     maze_binary = grid.array.T
     directions = {(-1, 0): 'L', (1, 0): 'R', (0, -1): 'U', (0, 1): 'D'}
-    q_map = {}
-    for (s, a), q in agent.q_table.items():
-        dx, dy = a[0] - s[0], a[1] - s[1]
-        dir = directions.get((dx, dy))
-        if dir:
-            if s not in q_map:
-                q_map[s] = {}
-            q_map[s][dir] = q
+    if hasattr(agent, "q_table"):
+        # Q-learning agent
+        q_map = {}
+        for (s, a), q in agent.q_table.items():
+            dx, dy = a[0] - s[0], a[1] - s[1]
+            dir = directions.get((dx, dy))
+            if dir:
+                if s not in q_map:
+                    q_map[s] = {}
+                q_map[s][dir] = q
+    
+    elif hasattr(agent, "get_value_function"):
+        # Value Iteration agent
+        V = agent.get_value_function()
+        for s, v in V.items():
+            next_s = agent.policy.get(s)
+            if next_s:
+                dx = next_s[0] - s[0]
+                dy = next_s[1] - s[1]
+                dir = directions.get((dx, dy))
+                if dir:
+                    q_map[s] = {dir: v}
 
+    if not all_q:
+        print("No Q or V values to visualize.")
+        return
     all_q = [q for v in q_map.values() for q in v.values()]
     norm = mcolors.Normalize(vmin=min(all_q), vmax=max(all_q))
     cmap = plt.cm.viridis

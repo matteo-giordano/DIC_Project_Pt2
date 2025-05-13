@@ -1,5 +1,5 @@
 import numpy as np
-from agent import TabularQLearningAgent, MonteCarloAgent
+from agent import TabularQLearningAgent, MonteCarloAgent, ValueIterationAgent
 from train import Trainer
 from grid import Grid
 from env_viz import visualize_q_values
@@ -23,6 +23,19 @@ def main():
     grid_path = os.path.join(base_dir, "grid_configs", "A1_grid.npy") # Absolute path of A1_grid.npy
     grid = Grid(array=np.load(grid_path), start_cell=(11, 3)) # Load the A1 grid
     graph = grid.graph
+
+    # Value Iteration test
+    trainer_VI = Trainer(
+        agent_cls=ValueIterationAgent,
+        reward_fn=reward_fn,
+        agent_kwargs={"gamma": 0.99, "theta": 1e-4}) 
+    result = trainer.plan_on_map(grid, stochasticity=0.1)
+    # Print result summary
+    print("Path:", result["path"])
+    print("Reached Goal:", result["valid_path"])
+    print("Path Length:", result["path_length"])
+    print("Iterations:", result["iters"])
+    visualize_q_values(trainer_VI.agent, grid, grid.start_cell, grid.target_cell)
 
     # A1 test grid
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)

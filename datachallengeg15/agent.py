@@ -192,6 +192,7 @@ class ValueIterationAgent:
         self.gamma = gamma
         self.theta = theta
         self.reward_fn = reward_fn
+        self.iterations = 0  # optional, used in plan_on_map
         self.V = {}       # value function: state -> value
         self.policy = {}  # mapping: state -> best next state
         # Actions: 0=Down, 1=Up, 2=Left, 3=Right (matches grid.py move_agent comment)
@@ -214,7 +215,8 @@ class ValueIterationAgent:
         """
         # Initialize the value function for all states to 0
         self.V = {s: 0.0 for s in self.graph.nodes}
-
+        self.iterations = 0  # Initialize iteration counter
+        
         while True:
             delta = 0.0  # Tracks the largest value change in this iteration
 
@@ -264,6 +266,62 @@ class ValueIterationAgent:
                 self.V[state] = best_value
                 self.policy[state] = best_action
 
+            self.iterations += 1
+
             # If all updates are below the convergence threshold, stop
             if delta < self.theta:
                 break
+
+    def extract_policy_path(self, start: tuple[int, int], goal: tuple[int, int], max_steps: int = 1000) -> list[tuple[int, int]]:
+        """
+        Extract the greedy path from start to goal by following the learned policy.
+        This method mimics the interface and behavior of Q-learning agent's extract_policy_path().
+        It is used to evaluate the quality of the learned policy by checking whether it can
+        successfully guide the agent from the starting cell to the goal cell.
+
+        Args:
+            start (tuple): The starting cell (x, y).
+            goal (tuple): The target/goal cell (x, y).
+            max_steps (int): Maximum number of steps to allow, in case of loops or dead-ends.
+
+        Returns:
+            path (List[tuple]): List of states visited from start to goal (inclusive).
+        """
+
+        state = start  # Initialize current state
+        path = [state]  # Initialize path with starting state
+        visited = set()  # Keep track of visited states to detect loops
+
+        for _ in range(max_steps):
+            # If the goal is reached, return the path
+            if state == goal:
+                break
+
+            # If the current state is not in the learned policy, stop (no decision available)
+            if state not in self.policy:
+                break
+
+            # Get the next state from the learned deterministic policy
+            next_state = self.policy[state]
+
+            # If we are stuck in a loop or invalid transition, stop
+            if next_state in visited:
+                break
+
+            visited.add(next_state)
+            path.append(next_state)
+            state = next_state
+
+        return path
+    
+    def get_value_function(self) -> dict:
+        """
+        Return the current value function as a dictionary.
+
+        This is equivalent to get_q_table() in Q-learning agents and is useful
+        for visualization, evaluation, and analysis of the learned value function.
+
+        Returns:
+            dict: A mapping from state (tuple) to its estimated value V(s).
+        """
+        return self.V
