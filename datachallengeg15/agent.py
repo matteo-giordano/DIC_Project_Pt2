@@ -4,7 +4,7 @@ import numpy as np
 import networkx as nx
 import random
 from collections import defaultdict
-
+from tqdm import trange
 
 class BaseAgent(ABC):
     def __init__(self):
@@ -203,21 +203,26 @@ class ValueIterationAgent:
             (1, 0),    # Right
         ]
 
-    def solve(self, grid, stochasticity=0.0):
+
+
+    def solve(self, grid, sigma=0.0, max_iterations=5000):
         """
         Perform Value Iteration to compute the optimal value function and policy.
 
         Args:
-            stochasticity (float): The probability that the intended action fails and
-            the agent executes a random other action instead. For example, if 
-            stochasticity=0.1, then the intended action is followed with 0.9 probability,
-            and the remaining 0.1 is distributed equally among the other 3 directions.
+            -grid: Grid object (for reward function access).
+            -sigma (float): The probability that the intended action fails and
+                the agent executes a random other action instead. For example, if 
+                sigma=0.1, then the intended action is followed with 0.9 probability,
+                and the remaining 0.1 is distributed equally among the other 3 directions.
+            -max_iterations (int): maximum number of iterations allowed.
         """
         # Initialize the value function for all states to 0
         self.V = {s: 0.0 for s in self.graph.nodes}
         self.iterations = 0  # Initialize iteration counter
-        
-        while True:
+
+        pbar = trange(max_iterations, desc="Value Iteration", leave=True)
+        for _ in pbar:
             delta = 0.0  # Tracks the largest value change in this iteration
 
             # Iterate over all states in the graph (i.e., reachable positions)
@@ -232,12 +237,12 @@ class ValueIterationAgent:
                     # Simulate stochastic effects: loop over all actual actions taken (4 directions)
                     for actual_a in self.actions:
                         # Determine the probability of taking actual_a given intended_a
-                        # For example, if stochasticity=0.1, then the intended action is followed with 0.9 probability,
+                        # For example, if sigma=0.1, then the intended action is followed with 0.9 probability,
                         # and the remaining 0.1 is distributed equally among the other 3 directions.
                         if actual_a == intended_a:
-                            prob = 1 - stochasticity
+                            prob = 1 - sigma
                         else:
-                            prob = stochasticity / (len(self.actions) - 1)
+                            prob = sigma / (len(self.actions) - 1)
 
                         # Compute next state after taking action actual_a
                         next_state = (state[0] + actual_a[0], state[1] + actual_a[1])
@@ -267,7 +272,7 @@ class ValueIterationAgent:
                 self.policy[state] = best_action
 
             self.iterations += 1
-
+            pbar.set_postfix(delta=delta)
             # If all updates are below the convergence threshold, stop
             if delta < self.theta:
                 break

@@ -103,7 +103,7 @@ class HPO:
         
         # VI
         if agent_cls.__name__ == "ValueIterationAgent":
-            result = trainer.plan_on_map(self.map, stochasticity=0.1)
+            result = trainer.plan_on_map(self.map, sigma=0.1)
             iters = result["iters"]
             optimal_path = result["path"]
             valid_path = result["valid_path"]

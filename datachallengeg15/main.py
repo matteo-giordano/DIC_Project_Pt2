@@ -29,7 +29,7 @@ def main():
         agent_cls=ValueIterationAgent,
         reward_fn=reward_fn,
         agent_kwargs={"gamma": 0.99, "theta": 1e-4}) 
-    result = trainer_VI.plan_on_map(grid, stochasticity=0.1)
+    result = trainer_VI.plan_on_map(grid, sigma=0.1, max_iterations=20000)
     # Print result summary
     print("Path:", result["path"])
     print("Reached Goal:", result["valid_path"])

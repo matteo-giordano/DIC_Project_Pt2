@@ -47,14 +47,14 @@ class Trainer:
                 prev_path = current_path
         return episode
     
-    def plan_on_map(self, grid, stochasticity=0.0):
+    def plan_on_map(self, grid, sigma=0.0, max_iterations = 5000):
         """
         Runs Value Iteration on the given map using the ValueIterationAgent.
 
         Args:
             grid (Grid): the map environment (must contain .graph and .target_cell)
-            stochasticity (float): deviation probability from intended action
-
+            sigma (float): deviation probability from intended action
+            max_iterations (int): maximum number of iterations allowed.
         Returns:
             dict: {
                 "path": List[Tuple[int, int]],
@@ -69,8 +69,8 @@ class Trainer:
             grid.graph,
             **self.agent_kwargs)
 
-        # Run value iteration (with stochasticity)
-        self.agent.solve(grid, stochasticity=stochasticity)
+        # Run value iteration (with sigma)
+        self.agent.solve(grid, sigma=sigma, max_iterations = max_iterations)
 
         # Extract policy path
         path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
