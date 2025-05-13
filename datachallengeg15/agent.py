@@ -202,7 +202,7 @@ class ValueIterationAgent:
             (1, 0),    # Right
         ]
 
-    def solve(self, stochasticity=0.0):
+    def solve(self, grid, stochasticity=0.0):
         """
         Perform Value Iteration to compute the optimal value function and policy.
 
@@ -243,14 +243,16 @@ class ValueIterationAgent:
                         if next_state not in self.graph:
                             next_state = state
 
-                        # Get the reward and update expected v-value
-                        reward = self.reward_fn(self.grid, next_state)
+                        # update expected v-value
+                        # v = SUM(P(s_next | s, a) * (reward(s, a, s_next) + gamma * V[s_next]))
+                        reward = self.reward_fn(grid, next_state)
                         v += prob * (reward + self.gamma * self.V[next_state])
 
-                    # Track the best action and value across all intended directions
+                    # best action and value among all intended directions
+                    # V[s] = MAX(v)
                     if v > best_value:
                         best_value = v
-                        # The best action is the intended direction that gives max V
+                        # The best action is the intended direction that gives max V[s]
                         best_action = (state[0] + intended_a[0], state[1] + intended_a[1])
 
                 # If the best action leads to an invalid state, stay in place
