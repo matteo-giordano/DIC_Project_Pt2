@@ -24,19 +24,23 @@ class HPO:
         self.max_workers = self.cfg.get("max_workers", 10)
         self.n_trials = self.cfg.get("n_trials", 20)
         self.n_seeds = self.cfg.get("n_seeds", 1)
+        self.sigma = self.cfg.get("sigma", [0, 0.1, 1])
 
     def run_experiment(self):
         # Generate random parameter combinations based on min/max values in config
         param_combinations = self._generate_random_params(self.n_trials)
         
         # Create tasks for each parameter combination and seed
+        sigmas = np.linspace(self.sigma[0], self.sigma[1], self.sigma[2])
         tasks = []
         for params in param_combinations:
             for seed in range(self.n_seeds):
-                # Copy params and add seed
-                params_with_seed = params.copy()
-                params_with_seed['seed'] = seed
-                tasks.append(params_with_seed)
+                for sigma in sigmas:
+                    # Copy params and add seed
+                    params_with_seed = params.copy()
+                    params_with_seed['seed'] = seed
+                    params_with_seed['sigma'] = sigma
+                    tasks.append(params_with_seed)
         
         # Run trials in parallel
         with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) as executor:
@@ -61,12 +65,14 @@ class HPO:
             flat_result["optimal_path_length"] = result["optimal_path_length"]
             flat_result["valid_path"] = result["valid_path"]
             flat_result["seed"] = result["seed"]
+            flat_result["sigma"] = result["sigma"]
+            flat_result["rewards"] = result["rewards"]
             flattened_results.append(flat_result)
 
         # Save results to CSV
         df = pd.DataFrame(flattened_results)
         timestamp = datetime.now().strftime('%d_%H-%M')
-        save_path = f"../results/{self.algorithm}_{self.map_name}_{self.reward_fn}_{timestamp}.csv"
+        save_path = f"../results/{self.algorithm}_{self.map_name}_{self.reward_fn}__{timestamp}.csv"
         print(f"Saving results to {save_path}")
         df.to_csv(save_path, index=False)
         return df
@@ -94,6 +100,7 @@ class HPO:
     def run_instance(self, params):
         # Extract seed from params for reproducibility
         seed = params.pop('seed', 0)  # Remove seed from params to avoid passing it to the agent
+        sigma = params.pop('sigma', 0.0)
         np.random.seed(seed)
         random.seed(seed)
         
@@ -101,7 +108,7 @@ class HPO:
         agent_params = params.copy()
         
         trainer = Trainer(eval(self.algorithm), eval(self.reward_fn), agent_kwargs=agent_params, early_stopping_threshold=self.early_stopping_threshold)
-        iters = trainer.train_on_map(self.map, 10_000, 10_000)
+        iters, rewards = trainer.train_on_map(self.map, 10_000, 10_000, sigma=sigma)
         optimal_path = (trainer.agent.extract_policy_path(self.map.start_cell, self.map.target_cell))
         valid_path = self.validate_path(optimal_path)
         optimal_path_length = len(optimal_path)
@@ -110,9 +117,11 @@ class HPO:
         return {
             "params": params,
             "iters": iters,
+            "rewards": rewards,
             "optimal_path_length": optimal_path_length,
             "valid_path": valid_path,
-            "seed": seed
+            "seed": seed,
+            "sigma": sigma
         }
     
     def validate_path(self, path):

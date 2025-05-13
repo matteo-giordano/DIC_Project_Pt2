@@ -17,17 +17,19 @@ class Trainer:
         for i in tqdm(range(len(dataset.maps))):
             raise NotImplementedError("Not implemented")
 
-    def train_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000):
+    def train_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000, sigma: float = 0.0):
         self.agent = self.agent_cls(grid.graph, **self.agent_kwargs)
-        env = Environment(grid, self.reward_fn)
-        
+        env = Environment(grid, self.reward_fn, sigma)
+        cumulative_rewards = []
+
         # Early stopping variables
         unchanged_episodes = 0
         prev_path = None
-        
+
         for episode in range(episodes):
         # for episode in tqdm(range(episodes)):
-            self._run_episode(env, self.agent, max_steps)
+            _, info = self._run_episode(env, self.agent, max_steps)
+            cumulative_rewards.append(info["cumulative_reward"])
             
             # Early stopping check
             if self.early_stopping_threshold is not None:
@@ -43,7 +45,7 @@ class Trainer:
                     unchanged_episodes = 0
                 
                 prev_path = current_path
-        return episode
+        return episode, cumulative_rewards
 
     def _run_episode(self, env: Environment, agent: BaseAgent, max_steps: int):
         state = env.reset()
@@ -62,6 +64,6 @@ class Trainer:
         if hasattr(agent, 'end_episode'):
             agent.end_episode()
             
-        return steps    
+        return steps, env.info
 
     
