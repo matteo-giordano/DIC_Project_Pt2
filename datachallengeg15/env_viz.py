@@ -8,9 +8,10 @@ from grid import Grid
 def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goal: tuple[int, int]):
     maze_binary = grid.array.T
     directions = {(-1, 0): 'L', (1, 0): 'R', (0, -1): 'U', (0, 1): 'D'}
+    q_map = {}
     if hasattr(agent, "q_table"):
         # Q-learning agent
-        q_map = {}
+        graph_title = "Q-values Heatmap & Optimal Path"
         for (s, a), q in agent.q_table.items():
             dx, dy = a[0] - s[0], a[1] - s[1]
             dir = directions.get((dx, dy))
@@ -21,6 +22,7 @@ def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goa
     
     elif hasattr(agent, "get_value_function"):
         # Value Iteration agent
+        graph_title = "Value Iteration Heatmap & Optimal Path"
         V = agent.get_value_function()
         for s, v in V.items():
             next_s = agent.policy.get(s)
@@ -30,11 +32,11 @@ def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goa
                 dir = directions.get((dx, dy))
                 if dir:
                     q_map[s] = {dir: v}
-
+   
+    all_q = [q for v in q_map.values() for q in v.values()]
     if not all_q:
         print("No Q or V values to visualize.")
         return
-    all_q = [q for v in q_map.values() for q in v.values()]
     norm = mcolors.Normalize(vmin=min(all_q), vmax=max(all_q))
     cmap = plt.cm.viridis
 
@@ -86,7 +88,7 @@ def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goa
     for y in range(H + 1):
         ax.axhline(y, color='lightgray', linewidth=0.5)
 
-    ax.set_title("Q-values Heatmap & Optimal Path")
+    ax.set_title(graph_title)
     ax.axis('off')
     plt.tight_layout()
     plt.show()

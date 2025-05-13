@@ -7,6 +7,8 @@ from tqdm import tqdm
 
 class Trainer:
     def __init__(self, agent_cls, reward_fn: callable, agent_kwargs: dict = {}, early_stopping_threshold: int = None):
+        # For ValueIterationAgent:
+        # - Must pass reward_fn as first argument when calling self.agent_cls(...)
         self.agent_cls = agent_cls
         self.agent = None
         self.reward_fn = reward_fn
@@ -63,13 +65,12 @@ class Trainer:
         """
         # Initialize the agent with parameters like gamma, theta
         self.agent = self.agent_cls(
+            self.reward_fn,
             grid.graph,
-            reward_fn=self.reward_fn,
-            **self.agent_kwargs  # typically gamma, theta
-        )
+            **self.agent_kwargs)
 
         # Run value iteration (with stochasticity)
-        self.agent.solve(stochasticity=stochasticity)
+        self.agent.solve(grid, stochasticity=stochasticity)
 
         # Extract policy path
         path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
