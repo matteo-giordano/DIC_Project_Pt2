@@ -20,6 +20,18 @@ class Trainer:
             raise NotImplementedError("Not implemented")
 
     def train_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000, sigma: float = 0.0):
+        # VI train
+        if self.agent_cls.__name__ == "ValueIterationAgent":
+            self.agent = self.agent_cls(self.reward_fn, grid.graph, **self.agent_kwargs)
+            self.agent.solve(grid, sigma=sigma, max_iterations=episodes) # Episodes and max_iterations are the same thing in VI
+            # Logging / optional inspection
+            path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
+            valid = path[-1] == grid.target_cell if path else False
+            print(f"[VI] Finished after {self.agent.iterations} iterations.")
+            print(f"[VI] Final path length: {len(path)}, Valid: {valid}")
+            return self.agent.iterations, []  # VI training does not create reward log
+        
+        # Q-learning and Monte Carlo train
         self.agent = self.agent_cls(grid.graph, **self.agent_kwargs)
         env = Environment(grid, self.reward_fn, sigma)
         cumulative_rewards = []
@@ -42,6 +54,7 @@ class Trainer:
                     unchanged_episodes += 1
                     if unchanged_episodes >= self.early_stopping_threshold:
                         # print(f"Early stopping at episode {episode+1}: optimal path unchanged for {self.early_stopping_threshold} episodes")
+                        episode += 1 # The counter "episode" won't automatically add 1 if we break it
                         break
                 else:
                     unchanged_episodes = 0

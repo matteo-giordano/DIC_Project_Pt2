@@ -14,29 +14,29 @@ def main():
     # Choose agent
     # agent = MonteCarloAgent
     # agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.995, "epsilon_min": 0.1}
-    
-    agent = TabularQLearningAgent
-    agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
+    # agent = TabularQLearningAgent
+    # agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
+    agent = ValueIterationAgent
+    agent_kwargs={"gamma": 0.99, "theta": 1e-8}
 
     # Load the grid
+    grid_name = "A1_grid.npy" # Name of the grid. Change different grid files by changing this if they are in the same folder
     base_dir = os.path.dirname(__file__) # Absolute path of main.py
-    grid_path = os.path.join(base_dir, "grid_configs", "A1_grid.npy") # Absolute path of A1_grid.npy
+    # Usage: If your grid file is in ../a/b/c/$grid_name$, change the line below
+    # grid_path = os.path.join(base_dir, "a", "b", "c", grid_name)
+    grid_path = os.path.join(base_dir, "grid_configs", grid_name) # Absolute path of A1_grid.npy
     grid = Grid(array=np.load(grid_path), start_cell=(11, 3)) # Load the A1 grid
     graph = grid.graph
 
+    """ Temporary not used
     # Value Iteration test
-    trainer_VI = Trainer(
-        agent_cls=ValueIterationAgent,
-        reward_fn=reward_fn,
-        agent_kwargs={"gamma": 0.99, "theta": 1e-4}) 
-    result = trainer_VI.plan_on_map(grid, sigma=0.1, max_iterations=20000)
-    # Print result summary
-    print("Path:", result["path"])
-    print("Reached Goal:", result["valid_path"])
-    print("Path Length:", result["path_length"])
-    print("Iterations:", result["iters"])
+    trainer = Trainer(agent_cls=ValueIterationAgent, reward_fn=reward_fn, agent_kwargs={"gamma": 0.99, "theta": 1e-4})
+    iters, _ = trainer.train_on_map(grid, episodes=20000, sigma=0.1)
+    path = trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell)
+    valid = path and path[-1] == grid.target_cell
+    rewards = trainer.evaluate_on_map(grid, episodes=100, sigma=0.1)
     visualize_q_values(trainer_VI.agent, grid, grid.start_cell, grid.target_cell)
-
+    """
     # A1 test grid
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
     trainer.train_on_map(grid, 10_000, 10_000)
