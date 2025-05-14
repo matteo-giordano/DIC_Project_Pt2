@@ -105,6 +105,13 @@ class HPO:
         
         # Create a copy of params to avoid modifying the original
         agent_params = params.copy()
+
+    # Convert gamma and theta to float if present
+        if 'gamma' in agent_params:
+            agent_params['gamma'] = float(agent_params['gamma'])
+        if 'theta' in agent_params:
+            agent_params['theta'] = float(agent_params['theta'])    
+                
         agent_cls = eval(self.algorithm)
         trainer = Trainer(eval(self.algorithm), eval(self.reward_fn), agent_kwargs=agent_params, early_stopping_threshold=self.early_stopping_threshold)
         iters, _ = trainer.train_on_map(self.map, 10_000, 10_000, sigma=sigma)
