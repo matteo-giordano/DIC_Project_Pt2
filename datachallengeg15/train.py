@@ -85,6 +85,28 @@ class Trainer:
             "iters": getattr(self.agent, "iterations", -1)  # optional count from solve()
         }
 
+    
+    def evaluate_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000, sigma: float = 0.0):
+        assert self.agent is not None, "Agent must be trained before evaluation"
+        env = Environment(grid, self.reward_fn, sigma=sigma)
+        self.agent.epsilon = 0.0
+        cumulative_rewards = []
+        for _ in range(episodes):
+            state = env.reset()
+            done = False
+            steps = 0
+            while not done and steps < max_steps:
+                action = self.agent.take_action(state)
+                next_state, _, done, info = env.step(action)
+                steps += 1
+                state = next_state
+                if done:
+                    cumulative_rewards.append(info["cumulative_reward"])    
+                    break
+            if not done:
+                cumulative_rewards.append([None])
+        return cumulative_rewards
+
 
     def _run_episode(self, env: Environment, agent: BaseAgent, max_steps: int):
         state = env.reset()
