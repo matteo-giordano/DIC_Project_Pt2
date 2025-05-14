@@ -52,7 +52,7 @@ class Trainer:
         env = Environment(grid, self.reward_fn, sigma=sigma)
         self.agent.epsilon = 0.0
         cumulative_rewards = []
-        for _ in tqdm(range(episodes)):
+        for _ in range(episodes):
             state = env.reset()
             done = False
             steps = 0
