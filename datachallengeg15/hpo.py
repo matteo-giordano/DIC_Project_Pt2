@@ -108,10 +108,11 @@ class HPO:
         agent_params = params.copy()
         
         trainer = Trainer(eval(self.algorithm), eval(self.reward_fn), agent_kwargs=agent_params, early_stopping_threshold=self.early_stopping_threshold)
-        iters, rewards = trainer.train_on_map(self.map, 10_000, 10_000, sigma=sigma)
+        iters, _ = trainer.train_on_map(self.map, 10_000, 10_000, sigma=sigma)
         optimal_path = (trainer.agent.extract_policy_path(self.map.start_cell, self.map.target_cell))
         valid_path = self.validate_path(optimal_path)
         optimal_path_length = len(optimal_path)
+        rewards = trainer.evaluate_on_map(self.map, 100, sigma=sigma)
         
         
         return {
