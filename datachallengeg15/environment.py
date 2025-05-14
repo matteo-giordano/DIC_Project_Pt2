@@ -1,14 +1,19 @@
 from grid import Grid
+import random
 
 
 class Environment:
-    def __init__(self, grid: Grid, reward_fn: callable):
+    def __init__(self, grid: Grid, reward_fn: callable, sigma: float = 0.0):
         self.grid = grid
         self.info = self._reset_info()
         self.reward_fn = reward_fn
+        self.sigma = sigma
 
     def step(self, action: int):
-        self.grid.move_agent(action)
+        if random.random() < self.sigma:
+            action = random.choice(list(self.grid.graph.neighbors(self.grid.agent_cell)))
+        else:
+            action = self.grid.move_agent(action)
 
         reward = self.reward_fn(self.grid, self.grid.agent_cell)
         done = self.grid.is_done()
