@@ -203,6 +203,12 @@ class ValueIterationAgent:
             (1, 0),    # Right
         ]
 
+    def take_action(self, state: tuple[int, int]) -> tuple[int, int]:
+        """
+        Deterministically choose the best action from the learned policy.
+        Used during evaluation (rollout).
+        """
+        return self.policy.get(state, state)
 
     def solve(self, grid, sigma=0.0, max_iterations=5000):
         """
