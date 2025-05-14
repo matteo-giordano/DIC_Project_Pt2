@@ -62,43 +62,6 @@ class Trainer:
                 prev_path = current_path
         return episode, cumulative_rewards
     
-    def plan_on_map(self, grid, sigma=0.0, max_iterations = 5000):
-        """
-        Runs Value Iteration on the given map using the ValueIterationAgent.
-
-        Args:
-            grid (Grid): the map environment (must contain .graph and .target_cell)
-            sigma (float): deviation probability from intended action
-            max_iterations (int): maximum number of iterations allowed.
-        Returns:
-            dict: {
-                "path": List[Tuple[int, int]],
-                "path_length": int,
-                "valid_path": bool,
-                "iters": int
-            }
-        """
-        # Initialize the agent with parameters like gamma, theta
-        self.agent = self.agent_cls(
-            self.reward_fn,
-            grid.graph,
-            **self.agent_kwargs)
-
-        # Run value iteration (with sigma)
-        self.agent.solve(grid, sigma=sigma, max_iterations = max_iterations)
-
-        # Extract policy path
-        path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
-
-        # Return result summary
-        return {
-            "path": path,
-            "path_length": len(path),
-            "valid_path": path[-1] == grid.target_cell if path else False,
-            "iters": getattr(self.agent, "iterations", -1)  # optional count from solve()
-        }
-
-    
     def evaluate_on_map(self, grid: Grid, episodes: int, max_steps: int = 2_000, sigma: float = 0.0):
         assert self.agent is not None, "Agent must be trained before evaluation"
         env = Environment(grid, self.reward_fn, sigma=sigma)
