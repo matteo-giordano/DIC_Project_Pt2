@@ -17,7 +17,7 @@ def main():
     # agent = TabularQLearningAgent
     # agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
     agent = ValueIterationAgent
-    agent_kwargs={"gamma": 0.99, "theta": 1e-2}
+    agent_kwargs={"gamma": 0.99, "theta": 1e-4}
 
     # Load the grid
     grid_name = "A1_grid_TOUGH.npy" # Name of the grid. Change different grid files by changing this if they are in the same folder
@@ -52,7 +52,7 @@ def main():
     grid = Grid(array=arr, start_cell=start_cell)
     
     trainer = Trainer(agent, reward_dont_revisit, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer.train_on_map(grid, 100_000, 1_000_000)
+    trainer.train_on_map(grid, 100_000, 1_000_000, sigma=0)
     visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
 

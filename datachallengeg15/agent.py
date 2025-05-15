@@ -237,7 +237,7 @@ class ValueIterationAgent:
                 legal_next_states = list(self.graph.neighbors(state))
                 if not legal_next_states:
                     continue
-                
+                deg = len(legal_next_states)
                 best_value = float("-inf")  # Initialize best value for this state
                 best_action = None          # Store the corresponding best action
 
@@ -250,9 +250,11 @@ class ValueIterationAgent:
                         # For example, if sigma=0.1, then the intended action is followed with 0.9 probability,
                         # and the remaining 0.1 is distributed equally among the other 3 directions.
                         if actual == intended:
-                            prob = 1 - sigma
+                            # prob = 1 - sigma
+                            prob = (1 - sigma) + sigma / deg
                         else:
-                            prob = sigma / (len(legal_next_states) - 1)
+                            prob = sigma / deg
+                            # prob = sigma / (len(legal_next_states) - 1)
 
                         # update expected v-value
                         # v = SUM(P(s_next | s, a) * (reward(s, a, s_next) + gamma * V[s_next]))
