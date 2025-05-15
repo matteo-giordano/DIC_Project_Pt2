@@ -25,10 +25,10 @@ class Trainer:
             self.agent = self.agent_cls(self.reward_fn, grid.graph, **self.agent_kwargs)
             self.agent.solve(grid, sigma=sigma, max_iterations=episodes) # Episodes and max_iterations are the same thing in VI
             # Logging / optional inspection
-            path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
-            valid = path[-1] == grid.target_cell if path else False
-            print(f"[VI] Finished after {self.agent.iterations} iterations.")
-            print(f"[VI] Final path length: {len(path)}, Valid: {valid}")
+            # path = self.agent.extract_policy_path(grid.start_cell, grid.target_cell)
+            # valid = path[-1] == grid.target_cell if path else False
+            # print(f"[VI] Finished after {self.agent.iterations} iterations.")
+            # print(f"[VI] Final path length: {len(path)}, Valid: {valid}")
             return self.agent.iterations, []  # VI training does not create reward log
         
         # Q-learning and Monte Carlo train

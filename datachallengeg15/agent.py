@@ -226,8 +226,9 @@ class ValueIterationAgent:
         self.V = {s: 0.0 for s in self.graph.nodes}
         self.iterations = 0  # Initialize iteration counter
 
-        pbar = trange(max_iterations, desc="Value Iteration", leave=True)
-        for _ in pbar:
+        # pbar = trange(max_iterations, desc="Value Iteration", leave=True)
+        #for _ in pbar:
+        for i in range(max_iterations):
             delta = 0.0  # Tracks the largest value change in this iteration
             new_V = self.V.copy() # Copy the 
             # Iterate over all states in the graph (i.e., reachable positions)
@@ -276,7 +277,7 @@ class ValueIterationAgent:
 
             self.V = new_V
             self.iterations += 1
-            pbar.set_postfix(delta=delta)
+            #pbar.set_postfix(delta=delta)
             # If all updates are below the convergence threshold, stop
             if delta < self.theta:
                 break
