@@ -10,6 +10,7 @@ from reward import reward_fn, reward_dont_revisit
 import concurrent.futures
 import random
 from datetime import datetime
+import os
 
 class HPO:
     def __init__(self, cfg_path: str):
@@ -140,9 +141,18 @@ class HPO:
         return valid
     
     def load_map(self):
-        return Grid(array=np.load(self.cfg["map"]), start_cell=tuple(self.cfg["start_cell"]))
+        grid_path = os.path.join(base_dir, "grid_configs", self.cfg["map"])
+        arr = np.load(grid_path)
+        arr[49, 1] = 3 # Target cell. 
+        # Note that the position of target cell is [row, col], while the start cell is [col, rol]
+        # The environment will finally deal with and show positions in [col, row], like (x, y)
+        # return Grid(array=np.load(self.cfg["map"]), start_cell=tuple(self.cfg["start_cell"]))
+        return Grid(array=arr, start_cell=tuple(self.cfg["start_cell"]))
 
 
 if __name__ == "__main__":
-    hpo = HPO("ql-hpo.yaml")
+    base_dir = os.path.dirname(__file__) # Absolute path of main.py
+    grid_path = os.path.join(base_dir, "ql-hpo.yaml")
+    # hpo = HPO("ql-hpo.yaml")
+    hpo = HPO(grid_path)
     hpo.run_experiment()

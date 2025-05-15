@@ -17,16 +17,16 @@ def main():
     # agent = TabularQLearningAgent
     # agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
     agent = ValueIterationAgent
-    agent_kwargs={"gamma": 0.99, "theta": 1e-8}
+    agent_kwargs={"gamma": 0.99, "theta": 1e-2}
 
     # Load the grid
-    grid_name = "A1_grid.npy" # Name of the grid. Change different grid files by changing this if they are in the same folder
+    grid_name = "A1_grid_TOUGH.npy" # Name of the grid. Change different grid files by changing this if they are in the same folder
     base_dir = os.path.dirname(__file__) # Absolute path of main.py
     # Usage: If your grid file is in ../a/b/c/$grid_name$, change the line below
     # grid_path = os.path.join(base_dir, "a", "b", "c", grid_name)
     grid_path = os.path.join(base_dir, "grid_configs", grid_name) # Absolute path of A1_grid.npy
-    grid = Grid(array=np.load(grid_path), start_cell=(11, 3)) # Load the A1 grid
-    graph = grid.graph
+    #grid = Grid(array=np.load(grid_path), start_cell=(11, 3)) # Load the A1 grid
+    #graph = grid.graph
 
     """ Temporary not used
     # Value Iteration test
@@ -36,7 +36,7 @@ def main():
     valid = path and path[-1] == grid.target_cell
     rewards = trainer.evaluate_on_map(grid, episodes=100, sigma=0.1)
     visualize_q_values(trainer_VI.agent, grid, grid.start_cell, grid.target_cell)
-    """
+    
     # A1 test grid
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
     trainer.train_on_map(grid, 10_000, 10_000)
@@ -44,9 +44,9 @@ def main():
     print(cum_rewards)
     visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
-
+    """
     # Complicated maze
-    arr = np.load("/home/barry/Desktop/uni/dataChallenge/dataChallengeG15/datachallengeg15/datasets/chico_20250509_005154/maps/map_00000.npy")
+    arr = np.load(grid_path)
     arr[49, 1] = 3  
     start_cell = (49, 1)
     grid = Grid(array=arr, start_cell=start_cell)

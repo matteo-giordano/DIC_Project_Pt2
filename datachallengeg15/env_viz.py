@@ -4,7 +4,6 @@ import matplotlib.colors as mcolors
 from agent import BaseAgent
 from grid import Grid
 
-
 def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goal: tuple[int, int]):
     maze_binary = grid.array.T
     directions = {(-1, 0): 'L', (1, 0): 'R', (0, -1): 'U', (0, 1): 'D'}
@@ -70,7 +69,7 @@ def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goa
     sx, sy = start
     gx, gy = goal
     ax.add_patch(patches.Rectangle((sx, sy), 1, 1, edgecolor='red', facecolor='red', alpha=0.5))
-    ax.add_patch(patches.Rectangle((gx, gy), 1, 1, edgecolor='red', facecolor='red', alpha=0.5))
+    ax.add_patch(patches.Rectangle((gx, gy), 1, 1, edgecolor='green', facecolor='green', alpha=0.5))
 
     # Centered path
     path = agent.extract_policy_path(start, goal)

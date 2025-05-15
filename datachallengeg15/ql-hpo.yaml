@@ -1,6 +1,7 @@
 algorithm: ValueIterationAgent                    # name of the agent class to use
-map: ../datachallengeg15/grid_configs/A1_grid.npy   # path to the map to use
-start_cell: [11, 3]                                 # starting cell of the agent on map
+#map: ../datachallengeg15/grid_configs/A1_grid_TOUGH.npy   # path to the map to use
+map: ../grid_configs/A1_grid_TOUGH.npy   # path to the map to use
+start_cell: [49, 1]                                 # starting cell of the agent on map
 max_episodes: 500                                # maximum number of episodes to run
 #max_steps: 10_000                                   # maximum number of steps to run
 early_stopping_threshold: 10                       # number of episodes to run before stopping the training
@@ -17,7 +18,7 @@ algorithm_params:
     #"epsilon": [0.01, 0.99]             # QL, MC 
     #"epsilon_decay": [0.6, 0.999]      # MC
     #"epsilon_min": [0.001, 0.3]        # MC
-    gamma: [0.9, 0.99]                  # VI
+    gamma: [0.5, 0.99]                  # VI
     theta: [1e-4, 1e-3]                 # VI
 
 
