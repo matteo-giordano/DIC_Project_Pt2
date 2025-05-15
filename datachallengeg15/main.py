@@ -52,7 +52,7 @@ def main():
     grid = Grid(array=arr, start_cell=start_cell)
     
     trainer = Trainer(agent, reward_dont_revisit, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer.train_on_map(grid, 100_000, 1_000_000, sigma=0)
+    trainer.train_on_map(grid, 100_000, 1_000_000, sigma=0.99)
     visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
 

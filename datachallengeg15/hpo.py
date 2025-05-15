@@ -143,7 +143,7 @@ class HPO:
     def load_map(self):
         grid_path = os.path.join(base_dir, "grid_configs", self.cfg["map"])
         arr = np.load(grid_path)
-        arr[49, 1] = 3 # Target cell. 
+        arr[1, 49] = 3 # Target cell. 
         # Note that the position of target cell is [row, col], while the start cell is [col, rol]
         # The environment will finally deal with and show positions in [col, row], like (x, y)
         # return Grid(array=np.load(self.cfg["map"]), start_cell=tuple(self.cfg["start_cell"]))

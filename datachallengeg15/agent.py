@@ -224,63 +224,41 @@ class ValueIterationAgent:
         """
         # Initialize the value function for all states to 0
         self.V = {s: 0.0 for s in self.graph.nodes}
-        self.iterations = 0  # Initialize iteration counter
+        self.iterations = 0
 
-        # pbar = trange(max_iterations, desc="Value Iteration", leave=True)
-        #for _ in pbar:
-        for i in range(max_iterations):
-            delta = 0.0  # Tracks the largest value change in this iteration
-            new_V = self.V.copy() # Copy the 
-            # Iterate over all states in the graph (i.e., reachable positions)
+        for _ in range(max_iterations):
+            delta = 0.0
+
+            # Precompute rewards for all states once per iteration
+            # If reward depends only on the state (not on iteratio)
+            rewards_cache = {s: self.reward_fn(grid, s) for s in self.graph.nodes}
+
             for state in self.graph.nodes:
-                # Only consider legal intended actions (neighbors)
                 legal_next_states = list(self.graph.neighbors(state))
                 if not legal_next_states:
                     continue
-                deg = len(legal_next_states)
-                best_value = float("-inf")  # Initialize best value for this state
-                best_action = None          # Store the corresponding best action
 
-                # Loop over all intended movement directions (up, down, left, right)
-                for intended in legal_next_states:
-                    v = 0.0  # Accumulate expected value for this action
-                    # Simulate stochastic effects: loop over all actual actions taken
-                    for actual in legal_next_states:
-                        # Determine the probability of taking actual_a given neighbor
-                        # For example, if sigma=0.1, then the intended action is followed with 0.9 probability,
-                        # and the remaining 0.1 is distributed equally among the other 3 directions.
-                        if actual == intended:
-                            # prob = 1 - sigma
-                            prob = (1 - sigma) + sigma / deg
-                        else:
-                            prob = sigma / deg
-                            # prob = sigma / (len(legal_next_states) - 1)
+                best_value = float("-inf")
+                best_action = None
 
-                        # update expected v-value
-                        # v = SUM(P(s_next | s, a) * (reward(s, a, s_next) + gamma * V[s_next]))
-                        reward = self.reward_fn(grid, actual)
-                        v += prob * (reward + self.gamma * self.V[actual])
+                # Since intended and Actual iterate over the sAme legal_next_states, precompute transition probabilities once
+                n = len(legal_next_states)
 
-                    # best action and value among all intended directions
-                    # V[s] = MAX(v)
+                for intended_idx, intended in enumerate(legal_next_states):
+                    v = 0.0
+                    for actual_idx, actual in enumerate(legal_next_states):
+                        prob = (1 - sigma) if actual_idx == intended_idx else sigma / (n - 1)
+                        v += prob * (rewards_cache[actual] + self.gamma * self.V[actual])
+
                     if v > best_value:
                         best_value = v
-                        # The best action is the intended direction that gives max V[s]
                         best_action = intended
 
-                # If the best action leads to an invalid state, stay in place
-                if best_action is None or best_action not in self.graph:
-                    best_action = state
-
-                # Update the value function and policy
-                new_V[state] = best_value
-                self.policy[state] = best_action
                 delta = max(delta, abs(self.V[state] - best_value))
+                self.V[state] = best_value
+                self.policy[state] = best_action
 
-            self.V = new_V
             self.iterations += 1
-            #pbar.set_postfix(delta=delta)
-            # If all updates are below the convergence threshold, stop
             if delta < self.theta:
                 break
 
