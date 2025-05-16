@@ -14,7 +14,13 @@ def main():
     # Choose agent
     # agent = MonteCarloAgent
     # agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.995, "epsilon_min": 0.1}
-    
+    # Optimized kwargs for Monte-Carlo
+    # agent_kwargs = {
+    #   "epsilon": 0.0546,
+    #   "gamma": 0.8140,
+    #   "epsilon_decay": 0.9599,
+    #   "epsilon_min": 0.0501
+    # } 
     agent = TabularQLearningAgent
     agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
 
@@ -29,7 +35,7 @@ def main():
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
 
     # Complicated maze
-    arr = np.load("/home/barry/Desktop/uni/dataChallenge/dataChallengeG15/datachallengeg15/datasets/chico_20250509_005154/maps/map_00000.npy")
+    arr = np.load("../datachallengeg15/datasets/chico_20250509_005154/maps/map_00000.npy")
     arr[49, 1] = 3  
     start_cell = (49, 1)
     grid = Grid(array=arr, start_cell=start_cell)
