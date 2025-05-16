@@ -11,8 +11,8 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-CSV_PATH = ['../results/MC_A1_2.csv', '../results/MC_Tough_2.csv']
-IMG_DIR = '../results/imgs/'
+CSV_PATH = ['../results/MonteCarloAgent_A1_grid_TOUGH_reward_fn__15_23-22.csv', '../results/MonteCarloAgent_A1_grid_reward_fn__16_01-40-all-parameters-3.csv']
+IMG_DIR = '../imgs/'
 
 def load_data(path):
     df = pd.read_csv(path)
