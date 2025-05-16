@@ -1,14 +1,14 @@
 algorithm: ValueIterationAgent                    # name of the agent class to use
 #map: ../datachallengeg15/grid_configs/A1_grid_TOUGH.npy   # path to the map to use
 map: ../grid_configs/A1_grid_TOUGH.npy   # path to the map to use
-start_cell: [1, 49]                                 # starting cell of the agent on map
+start_cell: [49, 1]                                 # starting cell of the agent on map
 max_episodes: 10_000                                # maximum number of episodes to run
 #max_steps: 10_000                                   # maximum number of steps to run
 early_stopping_threshold: 200                       # number of episodes to run before stopping the training
 reward_fn: reward_fn                                # name of the reward function to use
-max_workers: 11                                     # number of cores to run in parallel
-n_trials: 500                                         # number of trials to run for each combination of algorithm parameters
-n_seeds: 10                                          # number of seeds to run for each combination of algorithm parameters
+max_workers: 14                                     # number of cores to run in parallel
+n_trials: 500                                        # number of trials to run for each combination of algorithm parameters
+n_seeds: 2                                          # number of seeds to run for each combination of algorithm parameters
 sigma: [0, 0.9, 20]                                  # [min, max, number of trials] to run for each sigma for each seed & algorithm parameters
 # total number of trials = n_trials * n_seeds * n_sigma
 
@@ -18,7 +18,9 @@ algorithm_params:
     #"epsilon": [0.01, 0.99]             # QL, MC 
     #"epsilon_decay": [0.6, 0.999]      # MC
     #"epsilon_min": [0.001, 0.3]        # MC
-    gamma: [0.5, 0.99]                  # VI
-    theta: [1e-4, 1e-3]                 # VI
+    #gamma: [0.5, 0.99]                  # VI
+    #theta: [1e-6, 1e-5]                 # VI
+    gamma: [0.9, 0.99]                  # VI
+    theta: [1e-8, 1e-3]                 # VI
 
 

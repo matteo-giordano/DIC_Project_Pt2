@@ -247,7 +247,7 @@ class ValueIterationAgent:
                 for intended_idx, intended in enumerate(legal_next_states):
                     v = 0.0
                     for actual_idx, actual in enumerate(legal_next_states):
-                        prob = (1 - sigma) if actual_idx == intended_idx else sigma / (n - 1)
+                        prob = (1 - sigma) + sigma / n if actual_idx == intended_idx else sigma / n
                         v += prob * (rewards_cache[actual] + self.gamma * self.V[actual])
 
                     if v > best_value:
