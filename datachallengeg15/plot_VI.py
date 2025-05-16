@@ -2,160 +2,139 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 – needed for 3‑D projection
-from matplotlib.cm import plasma, viridis
-from matplotlib.colors import Normalize
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from matplotlib.colors import Normalize, LogNorm
 from matplotlib.cm import ScalarMappable
 from scipy.interpolate import griddata
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import os
 
-# ---------------------------------------------------------------------------
-# Value‑Iteration visualisations
-# ---------------------------------------------------------------------------
-# This script is intentionally kept as close as possible to plots3.py (the
-# Q‑learning visualiser).  Only the *minimal* changes required to substitute
-# VI‑specific hyper‑parameters (gamma, theta, sigma) have been applied.
-# Added inline English comments to highlight every divergence.
-# ---------------------------------------------------------------------------
+"""
+Value‑Iteration visualiser – robust colour handling (no SettingWithCopy warnings)
+-------------------------------------------------------------------------------
+* Keeps original plots3.py layout for easy Q‑learning comparison
+* Uses `smart_scatter` that operates on a **local copy** of the DataFrame slice,
+  eliminating pandas SettingWithCopyWarning.
+* Guards against empty slices / small‑sample cubic‑interp crashes
+* Closes every figure to prevent memory leakage
+"""
+
+# -----------------------------
+# Utility – smart scatter
+# -----------------------------
+
+def smart_scatter(ax, data, x, y, hue, *, max_cat=6, cmap='viridis'):
+    """Plot scatter with automatic discrete/continuous hue handling.
+
+    A local copy of `data` is created so we never modify the caller's
+    DataFrame slice, avoiding SettingWithCopyWarning.
+    """
+    uniques = np.unique(data[hue])
+
+    if len(uniques) <= max_cat:
+        data_plot = data.copy()
+        data_plot['hue_cat'] = data_plot[hue].astype(str)
+        base_pal = sns.color_palette('tab10')  # vivid & well‑spaced
+        if len(uniques) <= len(base_pal):
+            palette = base_pal[:len(uniques)]
+        else:
+            # fallback to husl which maximises distance in HSV space
+            palette = sns.color_palette('husl', n_colors=len(uniques))
+        sns.scatterplot(data=data_plot, x=x, y=y, hue='hue_cat', palette=palette,
+                        ax=ax, legend='brief')
+    else:
+        hmin, hmax = data[hue].min(), data[hue].max()
+        norm = LogNorm(vmin=hmin, vmax=hmax) if hmin > 0 and np.log10(hmax/hmin) > 2 else None
+        sns.scatterplot(data=data, x=x, y=y, hue=hue, palette=cmap,
+                        ax=ax, legend='brief', hue_norm=norm)
 
 # -----------------------------
 # 0. Load dataset
 # -----------------------------
-# Replace with your results file if different
-CSV_PATH = '../results/ValueIterationAgent_results.csv'
+CSV_PATH = '../results/ValueIterationAgent_A1_grid_TOUGH_reward_fn__16_06-23.csv'
+OUTPUT_DIR = 'aimgs_vi'
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 df = pd.read_csv(CSV_PATH)
 
-# Convert stringified list -> list  – identical to plots3.py
-# ---------------------------------------------------------
 df['rewards'] = df['rewards'].apply(eval)
-df = df[df['rewards'].apply(lambda x: isinstance(x, list) and all(isinstance(i, (int, float)) for i in x))]
+mask = df['rewards'].apply(lambda x: isinstance(x, list) and all(isinstance(i, (int, float)) for i in x))
+df = df[mask].copy()
+
 df['mean_reward'] = df['rewards'].apply(np.mean)
 df['reward_variance'] = df['rewards'].apply(np.var)
 
 # -----------------------------
-# 1. Distribution of hyper‑params (γ, θ, σ)
+# 1. Hyper‑param distributions
 # -----------------------------
-# Swapped α/ε -> θ; otherwise logic is identical.
-hyperparams = ['gamma', 'theta', 'sigma']
 fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-# Successful vs unsuccessful split (same heuristic as plots3)
-if {'valid_path', 'optimal_path_length'}.issubset(df.columns):
-    op_len = df['optimal_path_length'].mode().iloc[0]
-    invalid_runs = df[(df['valid_path'] == False) | (df['optimal_path_length'] != op_len)]
-else:
-    invalid_runs = pd.DataFrame(columns=df.columns)
-
-for i, param in enumerate(hyperparams):
-    sns.kdeplot(df[param], label='All Runs', ax=axs[i//2, i%2])
-    if not invalid_runs.empty:
-        sns.kdeplot(invalid_runs[param], label='Invalid/Non‑optimal', ax=axs[i//2, i%2])
-    axs[i//2, i%2].set_title(f'Distribution of {param}')
-    axs[i//2, i%2].legend()
-
-# Hide the unused 4th subplot to preserve layout parity
+for i, p in enumerate(['gamma', 'theta', 'sigma']):
+    sns.kdeplot(df[p], ax=axs[i//2, i%2])
+    axs[i//2, i%2].set_title(f'Distribution of {p}')
 axs[1, 1].axis('off')
-plt.tight_layout()
-plt.savefig('aimgs_vi/VI-distribution-hyperparams.png')
+plt.tight_layout(); plt.savefig(f'{OUTPUT_DIR}/VI-distribution-hyperparams.png'); plt.close()
 
 # -----------------------------
-# 2. Mean reward vs hyper‑params at fixed σ
+# 2 & 3. Fixed‑σ scatter (auto σ)
 # -----------------------------
-fixed_sigma_df = df[np.isclose(df['sigma'], 0.267, atol=1e-3)]
-fig, axs = plt.subplots(1, 3, figsize=(18, 5))
-# Keep three axes to match plots3; the third is intentionally blank.
-sns.scatterplot(data=fixed_sigma_df, x='gamma', y='mean_reward', ax=axs[0])
-sns.scatterplot(data=fixed_sigma_df, x='theta', y='mean_reward', ax=axs[1])
-axs[2].axis('off')
-for i, param in enumerate(['gamma', 'theta']):
-    axs[i].set_title(f'Mean Reward vs {param} (Sigma ≈ 0.267)')
-plt.tight_layout()
-plt.savefig('aimgs_vi/VI-reward_mean_fixed_sigma_hyperparams.png')
+σ_vals = sorted(df['sigma'].unique())
+fix_σ = σ_vals[len(σ_vals)//2]
+slice_df = df[np.isclose(df['sigma'], fix_σ, atol=1e-6)]
+if not slice_df.empty:
+    # mean reward
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    smart_scatter(axs[0], slice_df, 'gamma', 'mean_reward', 'theta')
+    smart_scatter(axs[1], slice_df, 'theta', 'mean_reward', 'theta')
+    axs[2].axis('off')
+    plt.tight_layout(); plt.savefig(f'{OUTPUT_DIR}/VI-reward_mean_fixed_sigma.png'); plt.close()
+    # variance
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    smart_scatter(axs[0], slice_df, 'gamma', 'reward_variance', 'theta')
+    smart_scatter(axs[1], slice_df, 'theta', 'reward_variance', 'theta')
+    axs[2].axis('off')
+    plt.tight_layout(); plt.savefig(f'{OUTPUT_DIR}/VI-reward_var_fixed_sigma.png'); plt.close()
+else:
+    print('[warn] chosen σ slice empty; skip fixed‑σ scatter')
 
 # -----------------------------
-# 3. Reward variance vs hyper‑params at fixed σ
-# -----------------------------
-fig, axs = plt.subplots(1, 3, figsize=(18, 5))
-sns.scatterplot(data=fixed_sigma_df, x='gamma', y='reward_variance', ax=axs[0])
-sns.scatterplot(data=fixed_sigma_df, x='theta', y='reward_variance', ax=axs[1])
-axs[2].axis('off')
-for i, param in enumerate(['gamma', 'theta']):
-    axs[i].set_title(f'Reward Variance vs {param} (Sigma ≈ 0.267)')
-plt.tight_layout()
-plt.savefig('aimgs_vi/VI-reward_variance_fixed_sigma_hyperparams.png')
-
-# -----------------------------
-# 4. Sigma vs mean reward (colour = θ)
+# 4. Sigma vs mean reward
 # -----------------------------
 plt.figure(figsize=(8, 6))
-sns.scatterplot(data=df, x='sigma', y='mean_reward', hue='theta', palette='viridis')
-plt.title('Mean Reward vs Sigma (colored by Theta)')
-plt.xlabel('Sigma')
-plt.ylabel('Mean Reward')
-plt.tight_layout()
-plt.savefig('aimgs_vi/VI-sigma-reward.png')
+ax = plt.gca()
+smart_scatter(ax, df, 'sigma', 'mean_reward', 'theta')
+plt.tight_layout(); plt.savefig(f'{OUTPUT_DIR}/VI-sigma-reward.png'); plt.close()
 
 # -----------------------------
-# 5. Reward surfaces – 2×2 grid; optional colour‑bar for iters
+# 5. 2×2 reward surfaces
 # -----------------------------
-selected_sigmas = sorted(df['sigma'].round(3).unique())[:4]
-fig = plt.figure(figsize=(16, 12))
-canvas = FigureCanvas(fig)
-for i, sigma_val in enumerate(selected_sigmas):
-    sub_df = df[np.isclose(df['sigma'], sigma_val, atol=1e-3)]
-    gamma_vals = np.linspace(sub_df['gamma'].min(), sub_df['gamma'].max(), 50)
-    theta_vals = np.linspace(sub_df['theta'].min(), sub_df['theta'].max(), 50)
-    gamma_grid, theta_grid = np.meshgrid(gamma_vals, theta_vals)
-    reward_grid = griddata((sub_df['gamma'], sub_df['theta']), sub_df['mean_reward'],
-                           (gamma_grid, theta_grid), method='cubic')
-    ax = fig.add_subplot(2, 2, i + 1, projection='3d')
-    surf = ax.plot_surface(gamma_grid, theta_grid, reward_grid, cmap='viridis', edgecolor='none')
-    ax.set_title(f'Mean Reward Surface (Sigma ≈ {sigma_val})')
-    ax.set_xlabel('Gamma'); ax.set_ylabel('Theta'); ax.set_zlabel('Mean Reward')
-
-# Colour‑bar for iteration count (only if column exists, mirroring plots3)
-if 'iters' in df.columns:
-    norm = Normalize(vmin=0, vmax=df['iters'].max())
-    sm = ScalarMappable(cmap='plasma', norm=norm); sm.set_array([])
-    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    fig.colorbar(sm, cax=cbar_ax, label='Iterations to Converge')
-canvas.print_figure('aimgs_vi/VI-reward_surfaces_2x2_colored_by_iters.png')
+fig = plt.figure(figsize=(16, 12)); canvas = FigureCanvas(fig)
+subplot_idx = 0
+for σ in σ_vals[:4]:
+    sub = df[np.isclose(df['sigma'], σ, atol=1e-6)]
+    if sub.shape[0] < 3:
+        continue
+    subplot_idx += 1
+    g, t = np.meshgrid(np.linspace(sub['gamma'].min(), sub['gamma'].max(), 40),
+                       np.linspace(sub['theta'].min(), sub['theta'].max(), 40))
+    z = griddata((sub['gamma'], sub['theta']), sub['mean_reward'], (g, t), method='cubic')
+    ax = fig.add_subplot(2, 2, subplot_idx, projection='3d')
+    ax.plot_surface(g, t, z, cmap='viridis', edgecolor='none')
+    ax.set_title(f'σ≈{σ}')
+if subplot_idx:
+    if 'iters' in df.columns:
+        norm = Normalize(vmin=0, vmax=df['iters'].max()); sm = ScalarMappable(cmap='plasma', norm=norm); sm.set_array([])
+        fig.colorbar(sm, ax=fig.axes, shrink=0.5, label='Iterations')
+    canvas.print_figure(f'{OUTPUT_DIR}/VI-reward_surfaces_2x2.png')
+plt.close()
 
 # -----------------------------
-# 6. Reward surfaces stacked by σ (identical logic)
+# 6. Stability boxplots
 # -----------------------------
-fig = plt.figure(figsize=(16, 4 * len(selected_sigmas)))
-canvas = FigureCanvas(fig)
-for i, sigma_val in enumerate(selected_sigmas):
-    sub_df = df[np.isclose(df['sigma'], sigma_val, atol=1e-3)]
-    gamma_vals = np.linspace(sub_df['gamma'].min(), sub_df['gamma'].max(), 50)
-    theta_vals = np.linspace(sub_df['theta'].min(), sub_df['theta'].max(), 50)
-    gamma_grid, theta_grid = np.meshgrid(gamma_vals, theta_vals)
-    reward_grid = griddata((sub_df['gamma'], sub_df['theta']), sub_df['mean_reward'],
-                           (gamma_grid, theta_grid), method='cubic')
-    ax = fig.add_subplot(len(selected_sigmas), 1, i + 1, projection='3d')
-    ax.plot_surface(gamma_grid, theta_grid, reward_grid, cmap='viridis', edgecolor='none')
-    ax.set_title(f'Mean Reward Surface (Sigma ≈ {sigma_val})')
-    ax.set_xlabel('Gamma'); ax.set_ylabel('Theta'); ax.set_zlabel('Mean Reward')
-canvas.print_figure('aimgs_vi/VI-reward_surfaces_by_sigma.png')
-
-# -----------------------------
-# 7. Stable vs Unstable parameter distributions
-# -----------------------------
-# Same technique as plots3 but reduced to γ, θ, σ.
-most_variable = df.sort_values('reward_variance', ascending=False).head(10).copy()
-least_variable = df.sort_values('reward_variance', ascending=True).head(10).copy()
-most_variable['stability'] = 'Most Variable'
-least_variable['stability'] = 'Most Stable'
-box_df = pd.concat([most_variable, least_variable], ignore_index=True)
-box_df['stability'] = pd.Categorical(box_df['stability'], categories=['Most Stable', 'Most Variable'])
-
+most = df.nlargest(10, 'reward_variance').assign(stability='Most Variable')
+least = df.nsmallest(10, 'reward_variance').assign(stability='Most Stable')
+box = pd.concat([least, most])
 fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-for ax, param in zip(axs.flatten(), ['gamma', 'theta', 'sigma']):
-    sns.boxplot(data=box_df, x='stability', y=param, ax=ax)
-    ax.set_title(f'{param.capitalize()} Distribution in Top 10 Stable vs Unstable Configs')
-# Hide unused subplot to keep grid symmetrical
-axs[1, 1].axis('off')
-plt.tight_layout()
-plt.savefig('aimgs_vi/VI-stable-unstable-params.png')
+for ax, p in zip(axs.flatten(), ['gamma', 'theta', 'sigma']):
+    sns.boxplot(data=box, x='stability', y=p, ax=ax)
+axs[1, 1].axis('off'); plt.tight_layout(); plt.savefig(f'{OUTPUT_DIR}/VI-stability.png'); plt.close()
 
-print(f"\n[OK] VI visualisations saved to aimgs_vi/ using input file: {CSV_PATH}\n")
