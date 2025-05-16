@@ -134,9 +134,17 @@ class HPO:
         return valid
     
     def load_map(self):
+        # Use this for A1_grid_TOUGH.py
+        # array = np.load(self.cfg["map"])
+        # array[49,1] = 3 # Set target cell
+        # return Grid(array=array, start_cell=tuple(self.cfg["start_cell"]))
+        # Use this for A1_grid.py
         return Grid(array=np.load(self.cfg["map"]), start_cell=tuple(self.cfg["start_cell"]))
 
 
 if __name__ == "__main__":
     hpo = HPO("ql-hpo.yaml")
+    # Uncomment to use terminal arguments
+    # import sys
+    # hpo = HPO(sys.argv[1] if len(sys.argv) > 1 else "ql-hpo.yaml")
     hpo.run_experiment()
