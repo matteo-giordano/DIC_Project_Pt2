@@ -1,0 +1,17 @@
+algorithm: MonteCarloAgent
+map: ../datachallengeg15/grid_configs/A1_grid_TOUGH.npy
+start_cell: [49, 1]
+max_episodes: 5000
+max_steps: 5000
+early_stopping_threshold: 200
+reward_fn: reward_fn
+max_workers: 10
+n_trials: 1000
+n_seeds: 5
+sigma: [0.0, 0.3, 2]
+
+algorithm_params:
+    "epsilon": [0.05, 0.3]
+    "epsilon_decay": [0.9, 0.99]
+    "epsilon_min": [0.001, 0.3]   
+    "gamma": [0.7, 0.95]
