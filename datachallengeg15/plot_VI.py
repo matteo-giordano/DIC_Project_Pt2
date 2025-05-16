@@ -51,7 +51,7 @@ def smart_scatter(ax, data, x, y, hue, *, max_cat=6, cmap='viridis'):
 # -----------------------------
 # 0. Load dataset
 # -----------------------------
-CSV_PATH = '../results/ValueIterationAgent_A1_grid_TOUGH_reward_fn__16_06-23.csv'
+CSV_PATH = '../results/ValueIterationAgent_A1_grid_TOUGH_reward_fn__16_16-28.csv'
 OUTPUT_DIR = 'aimgs_vi'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
