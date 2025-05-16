@@ -14,6 +14,15 @@ def main():
     # Choose agent, uncommit the corresponding agent name and parameters
     # agent = MonteCarloAgent
     # agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.995, "epsilon_min": 0.1}
+    # Optimized kwargs for Monte-Carlo
+    # agent_kwargs = {
+    #   "epsilon": 0.0546,
+    #   "gamma": 0.8140,
+    #   "epsilon_decay": 0.9599,
+    #   "epsilon_min": 0.0501
+    # } 
+    agent = TabularQLearningAgent
+    agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
     # agent = TabularQLearningAgent
     # agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
     agent = ValueIterationAgent
