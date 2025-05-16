@@ -1,4 +1,4 @@
-# DataChallengeG15 - Maze Navigation Framework
+# DataChallenge - Maze Navigation Framework
 
 A framework for training agents to navigate through maze environments using reinforcement learning.
 
@@ -355,3 +355,113 @@ results = hpo.run_experiment()
 best_params = results.loc[results["iters"].idxmin()]
 print(f"Best parameters: {best_params}")
 ```
+
+#### Reproduction of Code 
+
+1. Path Heatmap Visualization
+
+To visualize the path found by the agent in either `A1_grid` or `A1_grid_TOUGH` from Assignment 1, open `main.py` and uncomment the lines that define the agent you wish to reproduce. For example, to visualize the path found by Value Iteration, uncomment the following:
+
+```python
+# agent = ValueIterationAgent
+# agent_kwargs = {"gamma": 0.98, "theta": 1e-5}
+
+Then run main.py. The first figure that appears will show the path and heatmap for A1_grid. After closing that figure, a second heatmap will appear showing the path found in A1_grid_TOUGH.
+
+
+2. Reproducing Experiment Figures and Additional Outputs
+
+This section explains how to regenerate all the agents' visualizations presented in the report, as well as additional experiment figures and path visualizations not included in the report.
+
+---
+
+### 1. Reproduce Experiment Results (A1_grid and A1_grid_TOUGH)
+
+#### Step 1: Configure Map and Target Cell
+
+Open `hpo.py` and locate the `load_map(self)` function. To ensure the correct target is used (due to internal transpose operations), set:
+
+* For **A1_grid_TOUGH**:
+
+  ```
+  arr[49, 1] = 3  # Target cell → corresponds to [1, 49] in original
+  ```
+* For **A1_grid**:
+
+  ```
+  arr[3, 11] = 3  # Target cell → corresponds to [11, 3] in original
+  ```
+
+#### Step 2: Configure YAML File
+
+Open `ql-hpo.yaml` and choose the agent you wish to evaluate by setting `algorithm`. Uncomment the corresponding block under `algorithm_params` and edit hyperparameter ranges as needed.
+
+To test both grid types:
+
+* Set `map: A1_grid_TOUGH.npy` and `start_cell: [49, 1]` for the tough grid.
+* Set `map: A1_grid.npy` and `start_cell: [3, 11]` for the normal grid.
+
+#### Step 3: Run HPO Script
+
+Run the experiment by executing:
+
+```bash
+python hpo.py --yaml_path ql-hpo.yaml
+```
+
+Progress bars will indicate training status. After completion, a new `.csv` file will appear in the `results/` directory.
+
+---
+
+### 2. Generate Experiment Figures from Results
+
+Once the `.csv` file is created in `results/`, copy its filename and proceed as follows:
+
+#### (1) For Q-Learning:
+
+* Manually create an output folder:
+
+  ```bash
+  mkdir aimgs
+  ```
+* Open `plots3.py`, go to line 13 and replace the filename:
+
+  ```python
+  df = pd.read_csv('../results/Your_QLearning_Result.csv')
+  ```
+* Then run:
+
+  ```bash
+  python plots3.py
+  ```
+* All figures will be saved in the `aimgs/` directory.
+
+#### (2) For Value Iteration:
+
+* Open `plot_VI.py` and replace the file path at the top:
+
+  ```python
+  CSV_PATH = '../results/Your_VI_Result.csv'
+  ```
+* Run the script:
+
+  ```bash
+  python plot_VI.py
+  ```
+* Figures will be generated in the `aimgs_vi/` folder (created automatically).
+
+
+#### (3) For Monte Carlo:
+
+* Open `MC_plot.py` and replace the file path at the top:
+
+  ```python
+  CSV_PATH = ['../results/MC_A1_2.csv', '../results/MC_Tough_2.csv']
+  ```
+* Run the script:
+
+  ```bash
+  python MC_plot.py
+  ```
+* Figures will be generated in the ``../results/imgs/`` folder (created automatically).
+
