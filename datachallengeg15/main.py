@@ -11,7 +11,7 @@ def main():
     random.seed(12369)
     np.random.seed(12369)
 
-    # Choose agent
+    # Choose agent, uncommit the corresponding agent name and parameters
     # agent = MonteCarloAgent
     # agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.995, "epsilon_min": 0.1}
     # agent = TabularQLearningAgent
@@ -31,15 +31,6 @@ def main():
     grid = Grid(arr, start_cell=(3, 11)) # Load the A1 grid
     graph = grid.graph
 
-    """ Temporary not used
-    # Value Iteration test
-    trainer = Trainer(agent_cls=ValueIterationAgent, reward_fn=reward_fn, agent_kwargs={"gamma": 0.99, "theta": 1e-4})
-    iters, _ = trainer.train_on_map(grid, episodes=20000, sigma=0.1)
-    path = trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell)
-    valid = path and path[-1] == grid.target_cell
-    rewards = trainer.evaluate_on_map(grid, episodes=100, sigma=0.1)
-    visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
-    """
     # A1 test grid
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
     trainer.train_on_map(grid, 10_000, 10_000)
@@ -47,19 +38,22 @@ def main():
     print(cum_rewards)
     visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
-    """
+    
     # Complicated maze
-    arr = np.load(grid_path)
-    arr[49, 1] = 3  
-    start_cell = (49, 1)
-    grid = Grid(array=arr, start_cell=start_cell)
+    maze_name = "A1_grid_TOUGH.npy" # Name of the tough grid. Change different grid files by changing this if they are in the same folder
+    base_dir = os.path.dirname(__file__)
+    maze_path = os.path.join(base_dir, "grid_configs", maze_name) # Absolute path of A1_grid_TOUGH.npy
+    arr_maze = np.load(maze_path)
+    arr_maze[49, 1] = 3  
+    start_cell_maze = (49, 1)
+    grid_maze = Grid(array=arr_maze, start_cell=start_cell_maze)
     
     #trainer = Trainer(agent, reward_dont_revisit, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer.train_on_map(grid, 100_000, 1_000_000, sigma=0.5)
-    visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
-    print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
-    """
+    trainer.train_on_map(grid_maze, 100_000, 1_000_000, sigma=0.0)
+    visualize_q_values(trainer.agent, grid_maze, grid_maze.start_cell, grid_maze.target_cell)
+    print(trainer.agent.extract_policy_path(grid_maze.start_cell, grid_maze.target_cell))
+    
 if __name__ == "__main__":
     main()
 
