@@ -1,64 +1,94 @@
 import numpy as np
-from agent import TabularQLearningAgent, MonteCarloAgent, ValueIterationAgent
+from agent import TabularQLearningAgent, MonteCarloAgent, ValueIterationAgent, RandomAgent
 from train import Trainer
-from grid import Grid
+from grid import ContinuousWorld as Grid
 from env_viz import visualize_q_values
 from reward import reward_fn, reward_dont_revisit
+from shapely.geometry import shape, Point
+import json
 import os
+import matplotlib.pyplot as plt
+
+
+def plot_continuous_result(grid, path, title="Policy Path on Continuous Maze", save_path=None):
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    # Plot obstacles
+    for poly in grid.obstacles:
+        x, y = poly.exterior.xy
+        ax.fill(x, y, color='black')
+
+    # Plot path
+    if path and len(path) > 1:
+        px, py = zip(*path)
+        ax.plot(px, py, color='red', linewidth=2, marker='o', label='Policy Path')
+
+    # Plot start and goal
+    sx, sy = grid.start_cell
+    gx, gy = grid.target_cell
+    ax.plot(sx, sy, 'go', markersize=10, label='Start')
+    ax.plot(gx, gy, 'ro', markersize=10, label='Goal')
+
+    ax.set_xlim(0, grid.width)
+    ax.set_ylim(0, grid.height)
+    ax.set_aspect('equal')
+    ax.set_title(title)
+    ax.axis('off')
+    ax.legend()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"Figure saved to {save_path}")
+    else:
+        plt.show()
+
 
 def main():
     import random
     random.seed(12369)
     np.random.seed(12369)
 
-    # Choose agent, uncommit the corresponding agent name and parameters
-    # agent = MonteCarloAgent
-    # agent_kwargs = {"epsilon": 0.9, "gamma": 0.999, "epsilon_decay": 0.995, "epsilon_min": 0.1}
-    # agent = TabularQLearningAgent
-    # agent_kwargs = {"epsilon": 0.4, "gamma": 0.999, "alpha": 0.1}
-    agent = ValueIterationAgent
-    agent_kwargs={"gamma": 0.98, "theta": 1e-5}
+    # Choose agent
+    agent = RandomAgent
 
-    # Load the grid
-    grid_name = "A1_grid.npy" # Name of the grid. Change different grid files by changing this if they are in the same folder
-    base_dir = os.path.dirname(__file__) # Absolute path of main.py
-    # Usage: If your grid file is in ../a/b/c/$grid_name$, change the line below
-    # grid_path = os.path.join(base_dir, "a", "b", "c", grid_name)
-    grid_path = os.path.join(base_dir, "grid_configs", grid_name) # Absolute path of A1_grid.npy
-    arr = array=np.load(grid_path)
-    arr[3, 11] = 3
-    #grid = Grid(array=np.load(grid_path), start_cell=(3, 11)) # Load the A1 grid
-    grid = Grid(arr, start_cell=(3, 11)) # Load the A1 grid
+    # Load continuous maze JSON
+    grid_name = "continuous_maze_20250602_113010.json"
+    base_dir = os.path.dirname(__file__)
+    grid_path = os.path.join(base_dir, "grid_configs", grid_name)
+
+    with open(grid_path, 'r') as f:
+        data = json.load(f)
+
+    width = data["width"]
+    height = data["height"]
+    obstacles = [shape(geom) for geom in data["obstacles"]]
+
+    # Choose start and goal points
+    start_cell = (5.0, 5.0)
+    target_cell = (95.0, 95.0)
+
+    agent_kwargs = {"goal": target_cell}
+
+    # Initialize continuous space world
+    grid = Grid(width=width, height=height, obstacles=obstacles, start=start_cell, goal=target_cell)
     graph = grid.graph
 
-    # A1 test grid
+    # Trainer setup
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer.train_on_map(grid, 10_000, 10_000)
-    cum_rewards = trainer.evaluate_on_map(grid, 100, sigma=0.0)
-    print(cum_rewards)
-    visualize_q_values(trainer.agent, grid, grid.start_cell, grid.target_cell)
-    print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
-    
-    # Complicated maze
-    maze_name = "A1_grid_TOUGH.npy" # Name of the tough grid. Change different grid files by changing this if they are in the same folder
-    base_dir = os.path.dirname(__file__)
-    maze_path = os.path.join(base_dir, "grid_configs", maze_name) # Absolute path of A1_grid_TOUGH.npy
-    arr_maze = np.load(maze_path)
-    arr_maze[49, 1] = 3  
-    start_cell_maze = (49, 1)
-    grid_maze = Grid(array=arr_maze, start_cell=start_cell_maze)
-    
-    #trainer = Trainer(agent, reward_dont_revisit, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-    trainer.train_on_map(grid_maze, 100_000, 1_000_000, sigma=0.0)
-    visualize_q_values(trainer.agent, grid_maze, grid_maze.start_cell, grid_maze.target_cell)
-    print(trainer.agent.extract_policy_path(grid_maze.start_cell, grid_maze.target_cell))
-    
+
+    # Train and evaluate
+    trainer.train_on_map(grid, episodes=1000, max_steps=2000)
+    cum_rewards = trainer.evaluate_on_map(grid, episodes=100, sigma=0.00)
+    print("Evaluation cumulative rewards:", cum_rewards)
+
+    # Extract and visualize policy path
+    path = trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell)
+    print("Extracted policy path:")
+    print(path)
+
+    # Plot final figure
+    plot_continuous_result(grid, path, title="RandomAgent Policy Path in Continuous Maze")
+
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-

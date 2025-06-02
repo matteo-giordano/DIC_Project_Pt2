@@ -1,7 +1,7 @@
 from dataset import Dataset
 from environment import Environment
 from agent import BaseAgent
-from grid import Grid
+from grid import ContinuousWorld as Grid
 from tqdm import tqdm
 
 

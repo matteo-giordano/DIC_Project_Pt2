@@ -36,6 +36,49 @@ class BaseAgent(ABC):
         raise NotImplementedError
   
 
+class RandomAgent(BaseAgent):
+    def __init__(self, graph: nx.Graph, goal: tuple[float, float]):
+        self.graph = graph
+        self.goal = goal
+
+    def take_action(self, state: tuple[float, float]) -> tuple[float, float]:
+        actions = list(self.graph.neighbors(state))
+        if not actions:
+            return state
+        if self.goal in actions:
+            # This is cheating
+            return self.goal  # If goal is reachable, go there directly
+        return random.choice(actions)
+
+    def update(self, state: tuple[float, float], action: tuple[float, float], reward: float, next_state: tuple[float, float]):
+        """RandomAgent doesn't learn, so update does nothing."""
+        pass
+
+    def extract_policy_path(self, start: tuple[float, float], goal: tuple[float, float], max_steps: int = 1000) -> list[tuple[float, float]]:
+        """
+        Returns a random walk from start to goal.
+        If goal is a neighbor at any point, go directly to it.
+        """
+        path = [start]
+        current = start
+        visited = set()
+
+        for _ in range(max_steps):
+            neighbors = list(self.graph.neighbors(current))
+            if not neighbors:
+                break
+            if goal in neighbors:
+                path.append(goal)
+                break
+            next_step = random.choice(neighbors)
+            if next_step in visited:
+                break
+            path.append(next_step)
+            visited.add(next_step)
+            current = next_step
+
+        return path
+
 class TabularQLearningAgent(BaseAgent):
     def __init__(self, graph: nx.Graph, alpha: float = 0.1, gamma: float = 0.99, epsilon: float = 0.1):
         self.graph = graph

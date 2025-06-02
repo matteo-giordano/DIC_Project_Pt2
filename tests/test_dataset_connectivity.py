@@ -193,5 +193,5 @@ def count_connected_components(maze):
     return empty_cells, components
 
 if __name__ == "__main__":
-    dataset_path = "/home/barry/Desktop/uni/dataChallenge/dataChallengeG15/datachallengeg15/world/test_world/test_world_20250504_190646"
+    dataset_path = "/home/barry/Desktop/uni/dataChallenge/dataChallenge/datachallenge/world/test_world/test_world_20250504_190646"
     test_dataset_connectivity(dataset_path) 

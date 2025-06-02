@@ -49,7 +49,7 @@ def main():
     print(trainer.agent.extract_policy_path(grid.start_cell, grid.target_cell))
     
     # Complicated maze
-    maze_name = "A1_grid_TOUGH.npy" # Name of the tough grid. Change different grid files by changing this if they are in the same folder
+    maze_name = "continuous_maze_20250602_101644.json" # Name of the tough grid. Change different grid files by changing this if they are in the same folder
     base_dir = os.path.dirname(__file__)
     maze_path = os.path.join(base_dir, "grid_configs", maze_name) # Absolute path of A1_grid_TOUGH.npy
     arr_maze = np.load(maze_path)

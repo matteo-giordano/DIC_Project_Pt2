@@ -1,94 +1,62 @@
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+import matplotlib.patches as patches
+from shapely.geometry import Polygon
 from agent import BaseAgent
-from grid import Grid
+from grid import ContinuousWorld as Grid
 
-def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[int, int], goal: tuple[int, int]):
-    maze_binary = grid.array.T
-    directions = {(-1, 0): 'L', (1, 0): 'R', (0, -1): 'U', (0, 1): 'D'}
-    q_map = {}
+def visualize_q_values(agent: BaseAgent, grid: Grid, start: tuple[float, float], goal: tuple[float, float]):
+    # Prepare color normalization
     if hasattr(agent, "q_table"):
-        # Q-learning agent
-        graph_title = "Q-values Heatmap & Optimal Path"
+        q_map = {}
         for (s, a), q in agent.q_table.items():
-            dx, dy = a[0] - s[0], a[1] - s[1]
-            dir = directions.get((dx, dy))
-            if dir:
-                if s not in q_map:
-                    q_map[s] = {}
-                q_map[s][dir] = q
-    
+            q_map[s] = max(q_map.get(s, float('-inf')), q)
+        values = list(q_map.values())
+        title = "Q-values Heatmap & Policy Path"
     elif hasattr(agent, "get_value_function"):
-        # Value Iteration agent
-        graph_title = "Value Iteration Heatmap & Optimal Path"
-        V = agent.get_value_function()
-        for s, v in V.items():
-            next_s = agent.policy.get(s)
-            if next_s:
-                dx = next_s[0] - s[0]
-                dy = next_s[1] - s[1]
-                dir = directions.get((dx, dy))
-                if dir:
-                    q_map[s] = {dir: v}
-   
-    all_q = [q for v in q_map.values() for q in v.values()]
-    if not all_q:
-        print("No Q or V values to visualize.")
+        q_map = agent.get_value_function()
+        values = list(q_map.values())
+        title = "Value Function Heatmap & Policy Path"
+    else:
+        print("Agent has no Q-values or value function.")
         return
-    norm = mcolors.Normalize(vmin=min(all_q), vmax=max(all_q))
-    cmap = plt.cm.viridis
 
-    H, W = maze_binary.shape
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(maze_binary, cmap='gray_r', origin='upper', extent=(0, W, H, 0))
+    if not values:
+        print("No values to visualize.")
+        return
 
-    for (x, y), qs in q_map.items():
-        if maze_binary[y, x] != 0:
-            continue
+    cmap = cm.viridis
+    norm = mcolors.Normalize(vmin=min(values), vmax=max(values))
 
-        cx, cy = x, y
-        if 'U' in qs:
-            color = cmap(norm(qs['U']))
-            tri = [(cx, cy), (cx + 1, cy), (cx + 0.5, cy + 0.5)]
-            ax.add_patch(patches.Polygon(tri, color=color))
-        if 'D' in qs:
-            color = cmap(norm(qs['D']))
-            tri = [(cx, cy + 1), (cx + 1, cy + 1), (cx + 0.5, cy + 0.5)]
-            ax.add_patch(patches.Polygon(tri, color=color))
-        if 'L' in qs:
-            color = cmap(norm(qs['L']))
-            tri = [(cx, cy), (cx, cy + 1), (cx + 0.5, cy + 0.5)]
-            ax.add_patch(patches.Polygon(tri, color=color))
-        if 'R' in qs:
-            color = cmap(norm(qs['R']))
-            tri = [(cx + 1, cy), (cx + 1, cy + 1), (cx + 0.5, cy + 0.5)]
-            ax.add_patch(patches.Polygon(tri, color=color))
+    # Start plotting
+    fig, ax = plt.subplots(figsize=(10, 10))
 
-    # Highlight start and goal squares
-    sx, sy = start
-    gx, gy = goal
-    ax.add_patch(patches.Rectangle((sx, sy), 1, 1, edgecolor='red', facecolor='red', alpha=0.5))
-    ax.add_patch(patches.Rectangle((gx, gy), 1, 1, edgecolor='green', facecolor='green', alpha=0.5))
+    # Draw obstacles
+    for poly in grid.obstacles:
+        x, y = poly.exterior.xy
+        ax.fill(x, y, color='black')
 
-    # Centered path
-    path = agent.extract_policy_path(start, goal)
+    # Plot Q/Value points
+    for (x, y), val in q_map.items():
+        ax.plot(x, y, 'o', color=cmap(norm(val)), markersize=5)
 
-    if path:
-        px, py = zip(*[(x + 0.5, y + 0.5) for (x, y) in path])
-        ax.plot(px, py, color='red', linewidth=2, marker='o', markersize=3)
+    # Plot path from agent
+    if hasattr(agent, "extract_policy_path"):
+        path = agent.extract_policy_path(start, goal)
+        if path:
+            px, py = zip(*path)
+            ax.plot(px, py, color='red', linewidth=2, marker='o', markersize=3, label="Policy Path")
 
-    ax.set_xlim(0, W)
-    ax.set_ylim(H, 0)
+    # Draw start and goal markers
+    ax.plot(*start, 'go', markersize=10, label='Start')
+    ax.plot(*goal, 'ro', markersize=10, label='Goal')
+
+    ax.set_xlim(0, grid.width)
+    ax.set_ylim(0, grid.height)
     ax.set_aspect('equal')
-
-    for x in range(W + 1):
-        ax.axvline(x, color='lightgray', linewidth=0.5)
-    for y in range(H + 1):
-        ax.axhline(y, color='lightgray', linewidth=0.5)
-
-    ax.set_title(graph_title)
+    ax.set_title(title)
     ax.axis('off')
+    ax.legend()
     plt.tight_layout()
     plt.show()
-
