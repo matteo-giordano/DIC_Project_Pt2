@@ -10,29 +10,33 @@ class Environment:
         self.reward_fn = reward_fn
         self.sigma = sigma
 
-    def step(self, action: tuple[float, float]):
-        """
-        Move the agent to a new (x, y) location or a nearby one if noise is applied.
-        """
+    def step(self, action_idx: int):
+        """Agent takes an action in one of the discrete directions."""
+        current_pos = (self.world.agent.x, self.world.agent.y)
+        target_pos = self.world.direction_to_point(current_pos, action_idx)
+
         if self.sigma > 0 and random.random() < self.sigma:
-            # Apply Gaussian noise to the action
-            noisy_action = (
-                action[0] + random.gauss(0, self.sigma),
-                action[1] + random.gauss(0, self.sigma),
+            target_pos = (
+                target_pos[0] + random.gauss(0, self.sigma),
+                target_pos[1] + random.gauss(0, self.sigma)
             )
-            action = noisy_action
 
         try:
-            self.world.move_agent(action)
+            self.world.move_agent(target_pos)
         except ValueError:
-            # Invalid move (into obstacle or out of bounds), stay in place
+            # Invalid move, no-op
             pass
 
         reward = self.reward_fn(self.world, self.world.agent)
         done = self.world.is_done()
 
+        # LOG direction + distance for training use
+        moved_distance = Point(current_pos).distance(self.world.agent)
+
         self.info["cumulative_reward"] += reward
         self.info["total_steps"] += 1
+        self.info["direction_taken"] = action_idx
+        self.info["distance_moved"] = moved_distance
 
         return (self.world.agent.x, self.world.agent.y), reward, done, self.info
 

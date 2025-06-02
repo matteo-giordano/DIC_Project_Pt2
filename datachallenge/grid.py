@@ -16,7 +16,18 @@ class ContinuousWorld:
         self.graph = self.build_graph()
         self.start_cell = (self.start.x, self.start.y)       
         self.target_cell = (self.goal.x, self.goal.y)
+        self.num_directions = 32  # Can be adjusted
+        self.step_size = 2.0
+        self.directions = self._generate_directions()
+    
+    def _generate_directions(self):
+        angles = np.linspace(0, 2 * np.pi, self.num_directions, endpoint=False)
+        return [(np.cos(a), np.sin(a)) for a in angles]
 
+    def direction_to_point(self, current_pos: tuple[float, float], action_idx: int) -> tuple[float, float]:
+        dx, dy = self.directions[action_idx]
+        return (current_pos[0] + dx * self.step_size, current_pos[1] + dy * self.step_size)
+    
     def is_valid(self, point: Point) -> bool:
         """Check if the point is inside bounds and not in any obstacle."""
         if not (0 <= point.x <= self.width and 0 <= point.y <= self.height):

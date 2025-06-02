@@ -67,17 +67,17 @@ def main():
     start_cell = (5.0, 5.0)
     target_cell = (95.0, 95.0)
 
-    agent_kwargs = {"goal": target_cell}
-
+    
     # Initialize continuous space world
     grid = Grid(width=width, height=height, obstacles=obstacles, start=start_cell, goal=target_cell)
     graph = grid.graph
 
     # Trainer setup
+    agent_kwargs = {"goal": target_cell}
     trainer = Trainer(agent, reward_fn, agent_kwargs=agent_kwargs, early_stopping_threshold=250)
-
+    
     # Train and evaluate
-    trainer.train_on_map(grid, episodes=1000, max_steps=2000)
+    trainer.train_on_map(grid, episodes=1000, max_steps=200)
     cum_rewards = trainer.evaluate_on_map(grid, episodes=100, sigma=0.00)
     print("Evaluation cumulative rewards:", cum_rewards)
 

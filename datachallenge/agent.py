@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-
 import numpy as np 
 import networkx as nx
 import random
 from collections import defaultdict
 from tqdm import trange
+from environment import ContinuousWorld
 
 class BaseAgent(ABC):
     def __init__(self):
@@ -37,18 +37,13 @@ class BaseAgent(ABC):
   
 
 class RandomAgent(BaseAgent):
-    def __init__(self, graph: nx.Graph, goal: tuple[float, float]):
-        self.graph = graph
+    def __init__(self, world: ContinuousWorld, goal: tuple[float, float]):
+        self.world = world
+        self.graph = world.graph
         self.goal = goal
 
     def take_action(self, state: tuple[float, float]) -> tuple[float, float]:
-        actions = list(self.graph.neighbors(state))
-        if not actions:
-            return state
-        if self.goal in actions:
-            # This is cheating
-            return self.goal  # If goal is reachable, go there directly
-        return random.choice(actions)
+        return random.randint(0, self.graph.num_directions - 1)
 
     def update(self, state: tuple[float, float], action: tuple[float, float], reward: float, next_state: tuple[float, float]):
         """RandomAgent doesn't learn, so update does nothing."""
