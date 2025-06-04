@@ -8,7 +8,7 @@ class Maze:
     def __init__(self, array: np.ndarray, step_size=0.4):
         if not self._validate_array(array):
             raise ValueError("Invalid array")
-        self.array = self._preprocess_array(array.copy())
+        self.array = array.copy()
         self.map_height, self.map_width = self.array.shape
 
         self.action_map = {
@@ -26,9 +26,9 @@ class Maze:
         self.goal_radius = 1.
         self.agent_radius = 0.15
 
-        # Agent & Goal positions stored as numpy arrays (y, x)
-        self.agent_pos = np.array([1.5, 1.5])  # TODO hardcoded val
-        self.goal_pos = np.array(self.array.shape) - self.agent_pos  # TODO
+        # Agent & Goal positions stored as numpy arrays (-(y+1), x) , so agent_pos = (1.5, 1.5) -> array[-2, 1]
+        self.agent_pos = np.array([1.5, 1.5])
+        self.goal_pos = np.array(self.array.shape) - self.agent_pos  
 
         # Rendering attributes
         self.fig = None
@@ -101,40 +101,23 @@ class Maze:
         assert np.all(array[:, 0] == 1) and np.all(array[:, -1] == 1), "Array must have boundaries"
         return True
 
-    def _preprocess_array(self, array: np.ndarray) -> np.ndarray:
-        array[array == 2] = 1 # make obstacles and walls 1s
-        array[array == 3] = 0 # remove preset targets
-        return array
-
     def _is_valid_position(self, position: np.ndarray) -> bool:
-        """Check if the agent at given position would collide with walls."""
-        y, x = position
-        
-        # Check bounds first
-        if (y - self.agent_radius < 0 or y + self.agent_radius >= self.map_height or
-            x - self.agent_radius < 0 or x + self.agent_radius >= self.map_width):
-            return False
-        
-        # Sample points around the agent's circumference to check for wall collisions
-        num_samples = 8
-        angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
-        
-        for angle in angles:
-            # Calculate point on agent's circumference
-            sample_y = y + self.agent_radius * np.cos(angle)
-            sample_x = x + self.agent_radius * np.sin(angle)
+            """Check if the agent at given position would collide with walls."""
+            y, x = position
+            num_samples = 16
+            angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
             
-            # Check if this point is in bounds and not in a wall
-            if (sample_y < 0 or sample_y >= self.map_height or
-                sample_x < 0 or sample_x >= self.map_width):
-                return False
+            for angle in angles:
+                # Calculate point on agent's circumference
+                sample_y = y + self.agent_radius * np.sin(angle)
+                sample_x = x + self.agent_radius * np.cos(angle)
+                # plt.plot(sample_x, sample_y, 'ro')
                 
-            # Check if the grid cell at this sample point is a wall
-            grid_y, grid_x = int(sample_y), int(sample_x)
-            if self.array[grid_y, grid_x] == 1:
-                return False
-                
-        return True
+                if self.array[-int(np.floor(sample_y))- 1, int(np.floor(sample_x))] == 1:
+                    print(f"Collision at {sample_y}, {sample_x}")
+                    return False
+            print(f"No collision at {y}, {x}, {int(np.floor(sample_y))}, {int(np.floor(sample_x))}")
+            return True
 
     def _slide_along_wall(self, action_vec: np.ndarray) -> np.ndarray:
         """Move as far as possible in the desired direction until hitting a wall."""
@@ -191,9 +174,12 @@ class Environment:
 
 if __name__ == "__main__":
     from time import sleep
-    env = Maze(np.load("datachallengeg15/warehouse.npy").astype(np.int8))
+    warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
+    env = Maze(warehouse_map)
+    env.agent_pos = np.array([1.5, 22.5])
     for _ in range(100):
         env.render()
-        env.step(np.random.randint(0, 8))
-        sleep(0.1)
+        action = np.random.randint(0, 8)
+        env.step(action)
+        sleep(0.01)
                                                         
