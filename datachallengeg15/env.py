@@ -190,18 +190,10 @@ class Environment:
         return np.linalg.norm(self.maze.agent_pos - self.maze.goal_pos) < self.maze.goal_radius
 
 if __name__ == "__main__":
-    env = Maze(np.load("A1_grid.npy"))
-    env.render()
-    input()
-    env.step(0)
-    env.render()
-    input()
-    env.step(0)
-    env.render()
-    input()
-    env.step(7)
-    env.render()
-    input()
-    env.step(7)
-    env.render()
-    input()
+    from time import sleep
+    env = Maze(np.load("datachallengeg15/warehouse.npy").astype(np.int8))
+    for _ in range(100):
+        env.render()
+        env.step(np.random.randint(0, 8))
+        sleep(0.1)
+                                                        
