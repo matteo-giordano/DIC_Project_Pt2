@@ -27,7 +27,7 @@ class Maze:
         self.agent_radius = 0.15
 
         # Agent & Goal positions stored as numpy arrays (-(y+1), x) , so agent_pos = (1.5, 1.5) -> array[-2, 1]
-        self.agent_pos = np.array([1.5, 1.5])
+        self.agent_pos = np.array([1.5, 22.5])
         self.goal_pos = np.array(self.array.shape) - self.agent_pos  
 
         # Rendering attributes
@@ -47,9 +47,6 @@ class Maze:
         else:
             # Try to slide along walls
             self.agent_pos = self._slide_along_wall(action_vec)
-
-    def reset(self):
-        pass
 
     def render(self):
         """Render the maze with agent and target. Initialize plot on first call."""
@@ -104,7 +101,7 @@ class Maze:
     def _is_valid_position(self, position: np.ndarray) -> bool:
             """Check if the agent at given position would collide with walls."""
             y, x = position
-            num_samples = 16
+            num_samples = 8
             angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
             
             for angle in angles:
@@ -149,18 +146,44 @@ class Maze:
 
 
 class Environment:
-    def __init__(self, maze: Maze):
-        self.maze = maze
+    def __init__(self, array: np.ndarray, step_size=0.4):
+        self.maze = Maze(array=array, step_size=step_size)
 
     def step(self, action: int):
         self.maze.step(action)
         return self._get_observation(), self.is_done()
 
     def _get_observation(self):
-        return np.concatenate([self.maze.agent_pos, self.maze.goal_pos])
+        # Basic position information
+        agent_pos = self.maze.agent_pos.copy()
+        goal_pos = self.maze.goal_pos.copy()
+        
+        # Normalize positions by map size for better learning
+        normalized_agent = agent_pos / np.array([self.maze.map_height, self.maze.map_width])
+        normalized_goal = goal_pos / np.array([self.maze.map_height, self.maze.map_width])
+        
+        # Relative goal position (direction to goal)
+        goal_distance = np.linalg.norm(goal_pos - agent_pos)
+
+        # Local obstacle detection (8 directions around agent)
+        obstacle_info = []
+        for action_idx in range(8):
+            action_vec = self.maze.action_map[action_idx] * self.maze.step_size
+            test_pos = agent_pos + action_vec
+            is_blocked = not self.maze._is_valid_position(test_pos)
+            obstacle_info.append(1.0 if is_blocked else 0.0)
+        
+        # Combine all information
+        observation = np.concatenate([
+            normalized_agent,           # 2 values: normalized agent position
+            normalized_goal,            # 2 values: normalized goal position  
+            [goal_distance / np.linalg.norm(np.array([self.maze.map_height, self.maze.map_width]))], # 1 value: normalized distance to goal
+            obstacle_info               # 8 values: obstacle detection in each direction
+        ])
+        return observation
 
     def reset(self):
-        self.maze.agent_pos = np.array([1.5, 1.5]) + np.random.normal(0, 0.2, size=self.maze.agent_pos.shape)
+        self.maze.agent_pos = np.array([1.5, 22.5]) + np.random.normal(0, 0.2, size=self.maze.agent_pos.shape)
         return self._get_observation()
 
     def render(self):
@@ -172,11 +195,9 @@ class Environment:
 if __name__ == "__main__":
     from time import sleep
     warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = Maze(warehouse_map)
-    env.agent_pos = np.array([1.5, 22.5])
+    env = Environment(warehouse_map)
     for _ in range(100):
         env.render()
         action = np.random.randint(0, 8)
         env.step(action)
         sleep(0.01)
-                                                        
