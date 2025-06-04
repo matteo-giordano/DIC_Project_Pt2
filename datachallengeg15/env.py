@@ -111,12 +111,9 @@ class Maze:
                 # Calculate point on agent's circumference
                 sample_y = y + self.agent_radius * np.sin(angle)
                 sample_x = x + self.agent_radius * np.cos(angle)
-                # plt.plot(sample_x, sample_y, 'ro')
                 
                 if self.array[-int(np.floor(sample_y))- 1, int(np.floor(sample_x))] == 1:
-                    print(f"Collision at {sample_y}, {sample_x}")
                     return False
-            print(f"No collision at {y}, {x}, {int(np.floor(sample_y))}, {int(np.floor(sample_x))}")
             return True
 
     def _slide_along_wall(self, action_vec: np.ndarray) -> np.ndarray:
@@ -128,7 +125,7 @@ class Maze:
             return current_pos
             
         direction = action_vec / np.linalg.norm(action_vec)
-        
+
         # Binary search to find the maximum distance we can move
         min_distance = 0.0
         max_distance = np.linalg.norm(action_vec)
