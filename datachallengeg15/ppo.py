@@ -48,11 +48,7 @@ class CriticNetwork(nn.Module):
 
 class PPO:
     def __init__(self, state_dim=11, action_dim=8, lr_actor=1e-3, lr_critic=3e-3, 
-                 gamma=0.99, clip_epsilon=0.2, k_epochs=4, entropy_coef=0.01, seed=None):
-        # Set seed for network initialization if provided
-        if seed is not None:
-            torch.manual_seed(seed)
-            
+                 gamma=0.99, clip_epsilon=0.2, k_epochs=4, entropy_coef=0.01):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gamma = gamma
         self.clip_epsilon = clip_epsilon
@@ -227,7 +223,7 @@ def train_ppo_on_maze(episodes=2000, max_steps_per_episode=1000, update_frequenc
     env = Environment(warehouse_map)
     
     # Initialize PPO agent
-    agent = PPO(seed=seed)
+    agent = PPO()
     
     # Training metrics
     episode_rewards = []
@@ -356,7 +352,7 @@ def test_trained_agent(model_path="ppo_maze_model.pth", episodes=10, seed=42):
     env = Environment(warehouse_map)
     
     # Load trained agent
-    agent = PPO(state_dim=13, action_dim=8, seed=seed)
+    agent = PPO()
     agent.load(model_path)
     
     print("Testing trained PPO agent...")
@@ -372,12 +368,13 @@ def test_trained_agent(model_path="ppo_maze_model.pth", episodes=10, seed=42):
         
         env.render()  # Show initial state
         
-        while steps < 250:
+        done = False
+        while steps < 250 or not done:
             action, _ = agent.select_action(state, training=False)
             next_state, done = env.step(action)
             
             current_distance = np.linalg.norm(env.maze.agent_pos - env.maze.goal_pos)
-            reward = calculate_reward(env, done, best_distance, current_distance, position_history)
+            reward = calculate_reward(env, done, position_history, current_distance)
             
             # Update best distance achieved
             if current_distance < best_distance:
@@ -403,7 +400,7 @@ if __name__ == "__main__":
     SEED = 69
     
     # Train the agent
-    agent, rewards, lengths = train_ppo_on_maze(episodes=1000, max_steps_per_episode=2000, update_frequency=10, seed=SEED)
+    # agent, rewards, lengths = train_ppo_on_maze(episodes=1000, max_steps_per_episode=2000, update_frequency=10, seed=SEED)
     
     # Test the trained agent
     test_trained_agent(seed=SEED)
