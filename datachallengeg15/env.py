@@ -36,9 +36,12 @@ class Maze:
         self.agent_circle = None
         self.goal_circle = None
 
+        # Pre-compute action vectors for efficiency
+        self.action_vectors = np.array([self.action_map[i] for i in range(8)]) * self.step_size
+
     def step(self, action: int):
         # Get action & compute new position
-        action_vec = self.action_map[action] * self.step_size
+        action_vec = self.action_vectors[action]
         new_pos = self.agent_pos + action_vec
 
         # Check collision with walls
@@ -99,19 +102,44 @@ class Maze:
         return True
 
     def _is_valid_position(self, position: np.ndarray) -> bool:
-            """Check if the agent at given position would collide with walls."""
-            y, x = position
-            num_samples = 8
-            angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
-            
-            for angle in angles:
-                # Calculate point on agent's circumference
-                sample_y = y + self.agent_radius * np.sin(angle)
-                sample_x = x + self.agent_radius * np.cos(angle)
-                
-                if self.array[-int(np.floor(sample_y))- 1, int(np.floor(sample_x))] == 1:
-                    return False
-            return True
+        """Check if the agent at given position would collide with walls."""
+        y, x = position
+        num_samples = 8
+        angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
+        
+        # Vectorized computation of all sample points
+        sample_y = y + self.agent_radius * np.sin(angles)
+        sample_x = x + self.agent_radius * np.cos(angles)
+        
+        # Vectorized array indexing
+        grid_y = -np.floor(sample_y).astype(int) - 1
+        grid_x = np.floor(sample_x).astype(int)
+        
+        # Check if any sample point hits a wall
+        return not np.any(self.array[grid_y, grid_x] == 1)
+
+    def _are_valid_positions(self, positions: np.ndarray) -> np.ndarray:
+        """Vectorized version to check multiple positions at once."""
+        num_samples = 8
+        angles = np.linspace(0, 2*np.pi, num_samples, endpoint=False)
+        
+        # Broadcast positions and angles for vectorized computation
+        y_coords = positions[:, 0][:, np.newaxis]  # Shape: (n_positions, 1)
+        x_coords = positions[:, 1][:, np.newaxis]  # Shape: (n_positions, 1)
+        
+        # Compute all sample points for all positions
+        sample_y = y_coords + self.agent_radius * np.sin(angles)  # Shape: (n_positions, n_samples)
+        sample_x = x_coords + self.agent_radius * np.cos(angles)  # Shape: (n_positions, n_samples)
+        
+        # Convert to grid coordinates
+        grid_y = (-np.floor(sample_y) - 1).astype(int)
+        grid_x = np.floor(sample_x).astype(int)
+        
+        # Check collisions for all positions and samples
+        collisions = self.array[grid_y, grid_x] == 1  # Shape: (n_positions, n_samples)
+        
+        # Return True if position is valid (no collisions), False otherwise
+        return ~np.any(collisions, axis=1)  # Shape: (n_positions,)
 
     def _slide_along_wall(self, action_vec: np.ndarray) -> np.ndarray:
         """Move as far as possible in the desired direction until hitting a wall."""
@@ -149,6 +177,10 @@ class Environment:
     def __init__(self, array: np.ndarray, step_size=0.4):
         self.maze = Maze(array=array, step_size=step_size)
         self.start_pos = self.maze.agent_pos
+        
+        # Pre-compute normalization factors for efficiency
+        self.map_size_array = np.array([self.maze.map_height, self.maze.map_width])
+        self.map_diagonal_norm = np.linalg.norm(self.map_size_array)
 
     def step(self, action: int):
         self.maze.step(action)
@@ -160,24 +192,20 @@ class Environment:
         goal_pos = self.maze.goal_pos.copy()
         
         # Normalize positions by map size for better learning
-        normalized_agent = agent_pos / np.array([self.maze.map_height, self.maze.map_width])
-        normalized_goal = goal_pos / np.array([self.maze.map_height, self.maze.map_width])
+        normalized_agent = agent_pos / self.map_size_array
+        normalized_goal = goal_pos / self.map_size_array
         
         # Relative goal position (direction to goal)
         goal_distance = np.linalg.norm(goal_pos - agent_pos)
 
-        # Local obstacle detection (8 directions around agent)
-        obstacle_info = []
-        for action_idx in range(8):
-            action_vec = self.maze.action_map[action_idx] * self.maze.step_size
-            test_pos = agent_pos + action_vec
-            is_blocked = not self.maze._is_valid_position(test_pos)
-            obstacle_info.append(1.0 if is_blocked else 0.0)
+        # Vectorized local obstacle detection (8 directions around agent)
+        test_positions = agent_pos + self.maze.action_vectors
+        obstacle_info = (~self.maze._are_valid_positions(test_positions)).astype(np.float32)
         
         # Combine all information
         observation = np.concatenate([
             normalized_agent,           # 2 values: normalized agent position  
-            [goal_distance / np.linalg.norm(np.array([self.maze.map_height, self.maze.map_width]))], # 1 value: normalized distance to goal
+            [goal_distance / self.map_diagonal_norm], # 1 value: normalized distance to goal
             obstacle_info               # 8 values: obstacle detection in each direction
         ])
         return observation
@@ -213,36 +241,33 @@ class MultiTargetEnvironment(Environment):
         goal_pos = self.maze.goal_pos.copy()
         
         # Normalize positions by map size for better learning
-        normalized_agent = agent_pos / np.array([self.maze.map_height, self.maze.map_width])
-        normalized_goal = goal_pos / np.array([self.maze.map_height, self.maze.map_width])
+        normalized_agent = agent_pos / self.map_size_array
+        normalized_goal = goal_pos / self.map_size_array
         
         # Relative goal position (direction to goal)
         goal_distance = np.linalg.norm(goal_pos - agent_pos)
 
-        # Local obstacle detection (8 directions around agent)
-        obstacle_info = []
-        for action_idx in range(8):
-            action_vec = self.maze.action_map[action_idx] * self.maze.step_size
-            test_pos = agent_pos + action_vec
-            is_blocked = not self.maze._is_valid_position(test_pos)
-            obstacle_info.append(1.0 if is_blocked else 0.0)
+        # Vectorized local obstacle detection (8 directions around agent)
+        test_positions = agent_pos + self.maze.action_vectors
+        obstacle_info = (~self.maze._are_valid_positions(test_positions)).astype(np.float32)
         
         # Combine all information
         observation = np.concatenate([
             normalized_agent,           # 2 values: normalized agent position
             normalized_goal,            # 2 values: normalized goal position  
-            [goal_distance / np.linalg.norm(np.array([self.maze.map_height, self.maze.map_width]))], # 1 value: normalized distance to goal
+            [goal_distance / self.map_diagonal_norm], # 1 value: normalized distance to goal
             obstacle_info               # 8 values: obstacle detection in each direction
         ])
         return observation
 
 
 if __name__ == "__main__":
-    from time import sleep
+    from time import sleep, time
     warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
     env = Environment(warehouse_map)
-    for _ in range(100):
-        env.render()
+    t = time()
+    for _ in range(10000):
         action = np.random.randint(0, 8)
         env.step(action)
-        sleep(0.01)
+    e = time() - t
+    print(f"Execution time: {e:.4f} seconds")
