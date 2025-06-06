@@ -1,357 +1,233 @@
-# DataChallengeG15 - Maze Navigation Framework
+# DataChallengeG15 - PPO Maze Navigation
 
-A framework for training agents to navigate through maze environments using reinforcement learning.
+A reinforcement learning framework for training agents to navigate through maze environments using Proximal Policy Optimization (PPO).
+
+## Installation
+
+1. Create a virtual environment:
+```bash
+python -m venv A2DIC
+```
+
+2. Activate the virtual environment:
+```bash
+# On Linux/Mac
+source A2DIC/bin/activate
+
+# On Windows
+A2DIC\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
 ## Overview
 
-This project provides a flexible framework for training and evaluating reinforcement learning agents in maze navigation tasks. The codebase supports:
+This project implements a complete PPO (Proximal Policy Optimization) agent for maze navigation tasks. The framework includes:
 
-- Loading and manipulating maze datasets
-- Building environment representations
-- Training agents with customizable reward functions
-- Visualizing agent performance and learned policies
+- PPO agent with actor-critic networks
+- Continuous maze environment with collision detection
+- Multi-target environment support
+- Training and testing utilities
+- Real-time visualization
 
 ## Code Structure
 
-The codebase is organized into the following main modules:
+The codebase consists of three main components:
 
-- `dataset.py`: Handles loading, filtering, and manipulating maze datasets
-- `grid.py`: Represents the maze grid and provides navigation functionality
-- `environment.py`: Defines the reinforcement learning environment  
-- `agent.py`: Contains agent implementations, including a TabularQLearningAgent
-- `train.py`: Provides training utilities for agents
-- `reward.py`: Defines reward functions for the environment
-- `env_viz.py`: Visualization tools for the environment and agent behavior
-- `main.py`: Entry point for running experiments
+- `ppo.py`: Complete PPO implementation with actor-critic networks, experience replay, and training utilities
+- `env.py`: Maze environment classes with continuous movement and collision detection
+- `warehouse.npy`: Pre-built warehouse maze map for training and testing
 
-## Data Formats
+## Environment
 
-### Grid Format
+### Maze Class
 
-Grids are represented as 2D NumPy arrays of type `np.int8` with the following cell values:
-- `0`: Empty space (navigable)
-- `1`: Wall (obstacle)
-- `3`: Target cell (goal)
+The `Maze` class provides a continuous 2D navigation environment with:
 
-Grid requirements:
-- 2D array with odd dimensions
-- Surrounded by walls on all edges
-- Contains at least one target cell (value 3)
+- **8-directional movement**: North, Northeast, East, Southeast, South, Southwest, West, Northwest
+- **Collision detection**: Agent cannot move through walls, with sliding mechanics along obstacles
+- **Continuous positioning**: Agent position stored as floating-point coordinates
+- **Real-time rendering**: Matplotlib-based visualization with agent and goal tracking
 
-Example of creating a Grid:
+### Environment Class
 
-```python
-import numpy as np
-from grid import Grid
+The base `Environment` class wraps the maze and provides:
 
-# Create a grid from a numpy array
-array = np.ones((21, 21), dtype=np.int8)  # Start with all walls
-array[1:-1:2, 1:-1:2] = 0  # Create some paths
-array[10, 10] = 3  # Set target cell
-grid = Grid(array=array, start_cell=(1, 1))
-```
+- **State observation**: 11-dimensional state vector including:
+  - Normalized agent position (2 values)
+  - Normalized distance to goal (1 value) 
+  - Obstacle detection in 8 directions (8 values)
+- **Reward calculation**: Distance-based rewards with anti-loop penalties
+- **Episode management**: Reset functionality with position randomization
 
-### Action Format
+### MultiTargetEnvironment Class
 
-Actions in this framework are represented as:
+Extends the base environment with multiple goal positions for varied training:
 
-1. In agent implementations: 
-   - Actions are represented by the coordinates of the **target cell** as a tuple `(y, x)` 
-   - These are neighbor cells of the current state in the graph representation
+- **Multiple goals**: 4 predefined target locations in the warehouse
+- **Random goal selection**: Different goal chosen each episode
+- **Enhanced state space**: 13-dimensional observations including goal position
 
-2. When calling `Environment.step()`:
-   - The action is a coordinate tuple `(y, x)` representing the cell to move to
-   - This must be a valid neighbor of the current state
+## PPO Implementation
 
-Example of valid actions from a state:
-```python
-state = (5, 5)  # Current position (y, x)
-valid_actions = list(grid.graph.neighbors(state))  # e.g., [(4, 5), (6, 5), (5, 4), (5, 6)]
-```
+### Agent Architecture
 
-### Dataset Format
+The PPO agent consists of:
 
-The dataset handles collections of maze maps and their metadata. Each dataset contains:
+- **Actor Network**: Policy network with softmax output for action probabilities
+- **Critic Network**: Value function network for state value estimation
+- **Experience Buffer**: Stores transitions for batch learning
+- **Dual optimizers**: Separate optimizers for actor and critic networks
 
-1. Maps: 2D NumPy arrays (as described in Grid Format)
-2. Metadata: Dictionary containing information about each map:
-   - `generator_type`: Algorithm used to generate the maze (e.g., "prim", "recursive")
-   - `width`, `height`: Dimensions of the maze
-   - Additional properties specific to the generation method
+### Key Features
 
-Datasets can be loaded from disk or created programmatically:
+- **Clipped surrogate objective**: Prevents large policy updates
+- **Entropy regularization**: Encourages exploration
+- **Gradient clipping**: Prevents exploding gradients
+- **GAE (Generalized Advantage Estimation)**: Improved advantage calculation
+- **Configurable hyperparameters**: Easy tuning via PPOConfig class
 
-```python
-from dataset import Dataset
+### Training Process
 
-# Load an existing dataset
-dataset = Dataset().load("/path/to/dataset")
+The training loop includes:
 
-# Dataset folder structure:
-# /path/to/dataset/
-#   metadata.json          # Contains dataset info and map metadata
-#   maps/
-#     map_0000.npy         # Individual map files (numpy arrays)
-#     map_0001.npy
-#     ...
-```
+1. **Experience collection**: Agent interacts with environment
+2. **Batch updates**: Multiple epochs of policy optimization
+3. **Progress tracking**: Episode rewards, success rates, and losses
+4. **Model persistence**: Save/load trained models
 
 ## Usage
 
-### Basic Usage
+### Basic Training
 
 ```python
-from agent import TabularQLearningAgent
-from environment import Environment
-from grid import Grid
-from train import Trainer
-from reward import reward_fn
-from env_viz import visualize_q_values
+from datachallengeg15.ppo import train_ppo_on_maze, PPOConfig
 import numpy as np
 
-# Load a maze
-grid = Grid(array=np.load("path/to/maze.npy"), start_cell=(11, 3))
+# Configure hyperparameters
+config = PPOConfig(
+    lr_actor=1e-3,
+    lr_critic=3e-3,
+    gamma=0.99,
+    clip_epsilon=0.2,
+    k_epochs=4,
+    entropy_coef=0.01
+)
 
-# Create a trainer with the agent type and reward function
-trainer = Trainer(TabularQLearningAgent, None, reward_fn)
-
-# Train the agent on the maze
-trainer.train_on_map(grid, episodes=2000)
-
-# Visualize the learned policy
-visualize_q_values(trainer.agent, grid, (11, 3), grid.target_cell)
-```
-
-### Working with Datasets
-
-```python
-from dataset import Dataset
-
-# Load an existing dataset
-dataset = Dataset().load("path/to/dataset")
-
-# Filter dataset by criteria
-filtered_dataset = dataset.filter({
-    "generator_type": "prim",
-    "width": 21
-})
-
-# Visualize sample maps
-dataset.visualize(max_maps=4)
-
-# Sample a random map with specific properties
-map_data, metadata = dataset.sample(
-    generator_type="prim",
-    width=21,
-    height=21,
-    random_transform=True,
-    add_endpoint=True
+# Train the agent
+agent, rewards, lengths = train_ppo_on_maze(
+    episodes=1000,
+    max_steps_per_episode=2000,
+    update_frequency=10,
+    config=config
 )
 ```
 
-## Dataset Builder Web Application
-
-The project includes a web-based tool for creating and managing maze datasets with a user-friendly interface.
-
-### Features
-
-- Generate mazes using multiple algorithms:
-  - **Prim Algorithm**: Creates perfect mazes with exactly one path between any two points
-  - **Recursive Division**: Generates mazes by recursively dividing the space
-  - **Wilson's Algorithm**: Creates unbiased samples of perfect mazes
-  - **Terrain Generator**: Creates more organic, terrain-like structures
-  - **Gaussian Noise**: Generates random mazes with controllable smoothness
-  - **Manual Drawing**: Draw custom mazes by hand
-
-- Configure generation parameters:
-  - Maze dimensions (11×11 to 51×51)
-  - Algorithm-specific parameters (e.g., density, thresholds)
-  - Batch generation settings
-
-- Dataset management:
-  - Create datasets with mixed maze types
-  - Preview generated mazes before saving
-  - Ensure connectivity and uniqueness across mazes
-  - Save datasets to the `./datasets` folder
-  - Load and explore existing datasets
-
-- Exploration tools:
-  - Filter mazes by type and size
-  - View metadata for each maze
-  - Navigate through large collections
-
-### Running the Dataset Builder
-
-To launch the web application:
-
-```bash
-# Navigate to the project directory
-cd datachallengeg15
-
-# Run the web application
-python dataset_builder_web.py
-```
-
-The application will be available at http://localhost:5000 in your web browser.
-
-### Workflow
-
-1. **Create New Dataset**: Select maze generator types and configure parameters
-2. **Generate Sample Mazes**: Preview how mazes will look with current settings
-3. **Configure Dataset**: Set batch generation parameters for the full dataset
-4. **Generate Dataset**: Create the complete dataset with all configured maze types
-5. **Explore Results**: Browse, filter, and inspect the generated dataset
-
-Generated datasets are automatically saved to the `./datasets` directory and can be loaded directly into the framework using the Dataset class.
-
-## Implementing New Agents
-
-To implement a new agent, extend the `BaseAgent` abstract class in `agent.py`:
+### Testing Trained Agent
 
 ```python
-from agent import BaseAgent
+from datachallengeg15.ppo import test_trained_agent
 
-class MyCustomAgent(BaseAgent):
-    def __init__(self, graph, **kwargs):
-        super().__init__()
-        self.graph = graph
-        # Initialize your agent-specific parameters
-        
-    def take_action(self, state):
-        # Implement your action selection logic
-        # Return the selected action
-        pass
-        
-    def update(self, state, action, reward, next_state):
-        # Implement your learning/update logic
-        pass
-        
-    # Add any additional methods needed for your agent
+# Test the trained model
+test_trained_agent(
+    model_path="ppo_maze_model.pth",
+    episodes=2,
+    max_steps=250
+)
 ```
 
-Then, use your new agent with the existing framework:
+### Custom Environment Usage
 
 ```python
-trainer = Trainer(MyCustomAgent, dataset, reward_fn)
-trainer.train_on_map(grid, episodes=1000)
+from datachallengeg15.env import Environment, MultiTargetEnvironment
+import numpy as np
+
+# Load warehouse map
+warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
+
+# Create single-target environment
+env = Environment(warehouse_map)
+
+# Or create multi-target environment
+multi_env = MultiTargetEnvironment(warehouse_map)
+
+# Basic interaction loop
+state = env.reset()
+for step in range(100):
+    action = np.random.randint(0, 8)  # Random action
+    next_state, done = env.step(action)
+    env.render()  # Visualize
+    if done:
+        break
+    state = next_state
 ```
 
-## API Between Modules
+## Data Format
 
-### Environment-Agent Interface
+### Map Format
 
-- `Environment.step(action)`: Takes an action and returns `(next_state, reward, done, info)`
-- `Environment.reset()`: Resets the environment and returns the initial state
-- `Agent.take_action(state)`: Takes the current state and returns an action
-- `Agent.update(state, action, reward, next_state)`: Updates the agent based on experience
+Maps are 2D NumPy arrays of type `np.int8` with:
+- `0`: Empty space (navigable)
+- `1`: Wall (obstacle)
+- Odd dimensions with wall boundaries
 
-### Grid-Environment Interface
+### Action Format
 
-- `Grid.move_agent(action)`: Updates the agent's position based on action
-- `Grid.is_done()`: Checks if the target has been reached
-- `Grid.reset()`: Resets the agent to the starting position
-- `Grid.build_graph()`: Constructs a graph representation of the maze
+Actions are integers 0-7 representing 8 directions:
+- `0`: North, `1`: Northeast, `2`: East, `3`: Southeast
+- `4`: South, `5`: Southwest, `6`: West, `7`: Northwest
 
-### Trainer Interface
+### State Format
 
-- `Trainer.train_on_map(grid, episodes)`: Trains an agent on a specific grid
-- `Trainer.train_on_dataset(episodes)`: Trains an agent on multiple maps from a dataset
-- `Trainer._run_episode(env, agent, max_steps)`: Runs a single training episode
+State observations are 11-dimensional vectors (13 for MultiTargetEnvironment):
+- Agent position (normalized): 2 values
+- Goal position (normalized, MultiTarget only): 2 values
+- Distance to goal (normalized): 1 value
+- Obstacle detection (8 directions): 8 values
 
-## Reward Functions
+## Configuration
 
-Custom reward functions can be defined in `reward.py`. They should take the grid and agent's current cell as inputs and return a floating-point reward value:
+### PPOConfig Parameters
 
 ```python
-def custom_reward_fn(grid, agent_cell):
-    # Calculate custom reward based on grid state and agent position
-    # Return a float value
-    pass
+@dataclass
+class PPOConfig:
+    state_dim: int = 11          # State space dimension
+    action_dim: int = 8          # Action space dimension
+    hidden_size: int = 128       # Neural network hidden layer size
+    lr_actor: float = 1e-3       # Actor learning rate
+    lr_critic: float = 3e-3      # Critic learning rate
+    gamma: float = 0.99          # Discount factor
+    clip_epsilon: float = 0.2    # PPO clipping parameter
+    k_epochs: int = 4            # Update epochs per batch
+    entropy_coef: float = 0.01   # Entropy regularization coefficient
+    max_grad_norm: float = 0.5   # Gradient clipping threshold
+    memory_size: int = 10000     # Experience buffer size
 ```
 
-## Visualization
+## Reward Function
 
-The `env_viz.py` module provides visualization tools for the agent's learned policy:
+The reward system includes:
+
+- **Goal reward**: +120 for reaching the target
+- **Distance penalty**: Proportional to distance from goal
+- **Step penalty**: Small negative reward per step (-0.02)
+- **Loop penalty**: Additional penalty for revisiting recent positions (-0.5)
+
+## Model Persistence
+
+Trained models are saved as PyTorch state dictionaries containing:
+- Actor and critic network weights
+- Optimizer states
+- Configuration parameters
 
 ```python
-visualize_q_values(agent, grid, start_cell, goal_cell)
-```
+# Save model
+agent.save("my_model.pth")
 
-This shows a heatmap of Q-values and the optimal path extracted from the agent's policy.
-
-## Hyperparameter Optimization (HPO)
-
-The framework includes a hyperparameter optimization module (`hpo.py`) that allows for efficient tuning of agent parameters using random search with parallel execution.
-
-### Features
-
-- **Random Search**: Efficiently explores the parameter space by randomly sampling parameter combinations
-- **Parallel Execution**: Runs multiple trials concurrently to speed up the optimization process
-- **Multiple Seeds**: Tests each parameter combination with multiple random seeds for robust evaluation
-- **Configurable via YAML**: All settings controlled through a simple YAML configuration file
-
-### Usage
-
-```python
-from hpo import HPO
-
-# Create and run an HPO experiment using a config file
-hpo = HPO("ql-hpo.yaml")
-results_df = hpo.run_experiment()
-```
-
-### YAML Configuration Format
-
-The HPO module uses YAML configuration files to define the experiment parameters. Here's an example:
-
-```yaml
-# Agent configuration
-algorithm: TabularQLearningAgent  # Agent class name
-reward_fn: reward_fn              # Reward function to use
-
-# Environment configuration
-map: path/to/grid_map.npy         # Path to the maze map file
-start_cell: [11, 3]               # Starting position [y, x]
-
-# Training parameters
-max_episodes: 10_000              # Maximum episodes per trial
-max_steps: 10_000                 # Maximum steps per episode
-early_stopping_threshold: 500     # Stop if target reached consistently
-
-# HPO parameters
-max_workers: 10                   # Number of parallel processes
-n_trials: 500                     # Number of random parameter combinations to try
-n_seeds: 10                       # Number of random seeds per parameter combination
-
-# Parameter ranges to search (min and max values)
-algorithm_params:
-    "epsilon": [0.01, 0.99]       # Exploration rate range
-    "gamma": [0.01, 0.99]         # Discount factor range
-    # Add other parameters as needed
-```
-
-### Results
-
-The HPO process saves results to a CSV file containing:
-- All parameter values for each trial
-- Random seed used
-- Number of training iterations required
-- Optimal path length found
-- Whether a valid path was discovered
-
-Results are saved with a timestamp in the filename for easy tracking:
-```
-TabularQLearningAgent_A1_grid_reward_fn_23_12-45.csv
-```
-
-### Example: Running Hyperparameter Optimization
-
-```python
-# Run HPO experiment
-hpo = HPO("ql-hpo.yaml")
-results = hpo.run_experiment()
-
-# Analyze results
-best_params = results.loc[results["iters"].idxmin()]
-print(f"Best parameters: {best_params}")
+# Load model
+agent.load("my_model.pth")
 ```

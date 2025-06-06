@@ -53,22 +53,18 @@ def calculate_reward(env, done: bool, position_history: deque, current_distance:
     
     if done:
         return 120.0
-    
     # Distance normalization and penalties
     map_diagonal = np.linalg.norm(env.maze.array.shape)
     normalized_distance = current_distance / map_diagonal
     reward = -normalized_distance * 0.05 - 0.02
-    
     # Anti-loop penalty
     if len(position_history) >= 3 and current_pos in list(position_history)[-3:-1]:
         reward -= 0.5
-    
     return reward
 
 
 class ActorNetwork(nn.Module):
     """Actor network for policy approximation."""
-    
     def __init__(self, input_size: int, hidden_size: int, output_size: int):
         super().__init__()
         self.network = nn.Sequential(
@@ -91,7 +87,6 @@ class ActorNetwork(nn.Module):
 
 class CriticNetwork(nn.Module):
     """Critic network for value function approximation."""
-    
     def __init__(self, input_size: int, hidden_size: int):
         super().__init__()
         self.network = nn.Sequential(
@@ -114,7 +109,6 @@ class CriticNetwork(nn.Module):
 
 class PPOMemory:
     """Experience replay buffer for PPO."""
-    
     def __init__(self, max_size: int = 10000):
         self.max_size = max_size
         self._reset_buffers()
@@ -151,7 +145,6 @@ class PPOMemory:
 
 class PPO:
     """Proximal Policy Optimization agent"""
-    
     def __init__(self, config: Optional[PPOConfig] = None):
         self.config = config or PPOConfig()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -205,7 +198,7 @@ class PPO:
         old_action_logprobs = torch.FloatTensor(action_logprobs).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
         states_next = torch.FloatTensor(np.array(states_next)).to(self.device)
-        dones = torch.BoolTensor(dones).to(self.device)
+        dones = torch.tensor(dones, dtype=torch.bool).to(self.device)
         
         # Calculate advantages
         with torch.no_grad():
@@ -347,7 +340,7 @@ def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000,
     return agent, episode_rewards, episode_lengths
 
 
-def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 5, 
+def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2, 
                       max_steps: int = 250) -> None:
     """Test the trained PPO agent."""
     from env import Environment
@@ -400,13 +393,7 @@ def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 5
 
 
 if __name__ == "__main__":
-    SEED = 69
-    set_random_seeds(SEED)
-    
-    config = PPOConfig(lr_actor=1e-3, lr_critic=3e-3, gamma=0.99, clip_epsilon=0.2, 
-                      k_epochs=4, entropy_coef=0.01)
-    
-    agent, rewards, lengths = train_ppo_on_maze(episodes=1000, max_steps_per_episode=2000, 
-                                               update_frequency=10, config=config)
-    
+    set_random_seeds(69)
+    config = PPOConfig(lr_actor=1e-3, lr_critic=3e-3, gamma=0.99, clip_epsilon=0.2, k_epochs=4, entropy_coef=0.01)
+    agent, rewards, lengths = train_ppo_on_maze(episodes=1000, max_steps_per_episode=2000, update_frequency=10, config=config)
     test_trained_agent()
