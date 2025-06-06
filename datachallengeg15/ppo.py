@@ -2,7 +2,7 @@
 PPO (Proximal Policy Optimization) implementation for maze navigation.
 
 This module provides a complete PPO implementation with actor-critic networks,
-experience replay, and training utilities for maze environments.
+experience replay, and training and evaluation utilities for maze environments.
 """
 
 import torch
@@ -22,15 +22,17 @@ class PPOConfig:
     """Configuration for PPO hyperparameters."""
     state_dim: int = 11
     action_dim: int = 8
-    hidden_size: int = 128
-    lr_actor: float = 1e-3
-    lr_critic: float = 3e-3
+    hidden_size: int = 128  
+    lr_actor: float = 3e-4  
+    lr_critic: float = 1e-3
     gamma: float = 0.99
     clip_epsilon: float = 0.2
     k_epochs: int = 4
     entropy_coef: float = 0.01
     max_grad_norm: float = 0.5
-    memory_size: int = 10000
+    memory_size: int = 2048  
+    batch_size: int = 64
+    gae_lambda: float = 0.95 
 
 
 def set_random_seeds(seed: int) -> None:
@@ -48,16 +50,17 @@ def set_random_seeds(seed: int) -> None:
 
 def calculate_reward(env, done: bool, position_history: deque, current_distance: float) -> float:
     """Calculate reward with improved shaping and anti-loop mechanism."""
+    map_diagonal = 46 # TODO: hardcoded for efficiency
     current_pos = tuple(env.maze.agent_pos)
     position_history.append(current_pos)
     
     if done:
         return 120.0
     # Distance normalization and penalties
-    map_diagonal = np.linalg.norm(env.maze.array.shape)
     normalized_distance = current_distance / map_diagonal
-    reward = -normalized_distance * 0.05 - 0.02
-    # Anti-loop penalty
+    reward = -normalized_distance * 0.1 - 0.01  
+    
+    # Simplified anti-loop penalty
     if len(position_history) >= 3 and current_pos in list(position_history)[-3:-1]:
         reward -= 0.5
     return reward
@@ -69,8 +72,8 @@ class ActorNetwork(nn.Module):
         super().__init__()
         self.network = nn.Sequential(
             nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
+            nn.Linear(hidden_size // 2, output_size)
         )
         self._init_weights()
     
@@ -91,8 +94,8 @@ class CriticNetwork(nn.Module):
         super().__init__()
         self.network = nn.Sequential(
             nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, 1)
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
+            nn.Linear(hidden_size // 2, 1)
         )
         self._init_weights()
     
@@ -108,39 +111,45 @@ class CriticNetwork(nn.Module):
 
 
 class PPOMemory:
-    """Experience replay buffer for PPO."""
-    def __init__(self, max_size: int = 10000):
+    """Experience replay buffer for PPO with pre-allocated arrays for speed."""
+    def __init__(self, max_size: int = 2048):
         self.max_size = max_size
-        self._reset_buffers()
-    
-    def _reset_buffers(self) -> None:
-        self.states = deque(maxlen=self.max_size)
-        self.actions = deque(maxlen=self.max_size)
-        self.action_logprobs = deque(maxlen=self.max_size)
-        self.rewards = deque(maxlen=self.max_size)
-        self.states_next = deque(maxlen=self.max_size)
-        self.dones = deque(maxlen=self.max_size)
+        self.ptr = 0
+        self.size = 0
+        
+        # Pre-allocate arrays for better performance
+        self.states = np.zeros((max_size, 11), dtype=np.float32)
+        self.actions = np.zeros(max_size, dtype=np.int32)
+        self.action_logprobs = np.zeros(max_size, dtype=np.float32)
+        self.rewards = np.zeros(max_size, dtype=np.float32)
+        self.states_next = np.zeros((max_size, 11), dtype=np.float32)
+        self.dones = np.zeros(max_size, dtype=bool)
     
     def store(self, state: np.ndarray, action: int, action_logprob: float, 
               reward: float, state_next: np.ndarray, done: bool) -> None:
-        self.states.append(state)
-        self.actions.append(action)
-        self.action_logprobs.append(action_logprob)
-        self.rewards.append(reward)
-        self.states_next.append(state_next)
-        self.dones.append(done)
+        self.states[self.ptr] = state
+        self.actions[self.ptr] = action
+        self.action_logprobs[self.ptr] = action_logprob
+        self.rewards[self.ptr] = reward
+        self.states_next[self.ptr] = state_next
+        self.dones[self.ptr] = done
+        
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
     
-    def get_all(self) -> Tuple[List, ...]:
-        """Return all stored transitions as lists."""
-        return (list(self.states), list(self.actions), list(self.action_logprobs),
-                list(self.rewards), list(self.states_next), list(self.dones))
+    def get_all(self) -> Tuple[np.ndarray, ...]:
+        """Return all stored transitions as numpy arrays."""
+        idx = slice(0, self.size)
+        return (self.states[idx], self.actions[idx], self.action_logprobs[idx],
+                self.rewards[idx], self.states_next[idx], self.dones[idx])
     
     def clear(self) -> None:
         """Clear all stored transitions."""
-        self._reset_buffers()
+        self.ptr = 0
+        self.size = 0
     
     def __len__(self) -> int:
-        return len(self.states)
+        return self.size
 
 
 class PPO:
@@ -155,9 +164,9 @@ class PPO:
         self.actor_old = ActorNetwork(self.config.state_dim, self.config.hidden_size, self.config.action_dim).to(self.device)
         self.actor_old.load_state_dict(self.actor.state_dict())
         
-        # Initialize optimizers
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.config.lr_actor)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.config.lr_critic)
+        # Initialize optimizers with weight decay for regularization
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.config.lr_actor, weight_decay=1e-5)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.config.lr_critic, weight_decay=1e-5)
         
         self.memory = PPOMemory(self.config.memory_size)
         print(f"PPO Agent initialized on device: {self.device}")
@@ -182,69 +191,97 @@ class PPO:
         """Store transition in experience buffer."""
         self.memory.store(state, action, action_logprob, reward, state_next, done)
     
-    def _compute_advantages(self, rewards: torch.Tensor, values: torch.Tensor, 
-                           values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute advantages and returns using TD error."""
-        td_targets = rewards + self.config.gamma * values_next * (~dones)
-        advantages = td_targets - values
-        return (advantages - advantages.mean()) / (advantages.std() + 1e-8), td_targets
+    def _compute_gae_advantages(self, rewards: torch.Tensor, values: torch.Tensor, 
+                               values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Compute advantages using Generalized Advantage Estimation (GAE)."""
+        advantages = torch.zeros_like(rewards)
+        gae = 0
+        
+        for t in reversed(range(len(rewards))):
+            if t == len(rewards) - 1:
+                next_value = values_next[t] * (~dones[t])
+            else:
+                next_value = values[t + 1]
+            
+            delta = rewards[t] + self.config.gamma * next_value - values[t]
+            gae = delta + self.config.gamma * self.config.gae_lambda * (~dones[t]) * gae
+            advantages[t] = gae
+        
+        returns = advantages + values
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        return advantages, returns
     
     def update(self) -> Tuple[float, float]:
         states, actions, action_logprobs, rewards, states_next, dones = self.memory.get_all()
         
         # Convert to tensors
-        states = torch.FloatTensor(np.array(states)).to(self.device)
+        states = torch.FloatTensor(states).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         old_action_logprobs = torch.FloatTensor(action_logprobs).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
         states_next = torch.FloatTensor(np.array(states_next)).to(self.device)
-        dones = torch.tensor(dones, dtype=torch.bool).to(self.device)
+        dones = torch.BoolTensor(dones).to(self.device)
         
-        # Calculate advantages
+        # Calculate advantages using GAE
         with torch.no_grad():
             values = self.critic(states).squeeze()
             values_next = self.critic(states_next).squeeze()
-            advantages, td_targets = self._compute_advantages(rewards, values, values_next, dones)
+            advantages, returns = self._compute_gae_advantages(rewards, values, values_next, dones)
         
         total_actor_loss = total_critic_loss = 0.0
         
+        # Mini-batch training for better efficiency
+        batch_size = min(self.config.batch_size, len(states))
+        indices = torch.randperm(len(states))
+        
         for _ in range(self.config.k_epochs):
-            # Get current policy predictions
-            action_probs = self.actor(states)
-            dist = torch.distributions.Categorical(action_probs)
-            new_action_logprobs = dist.log_prob(actions)
-            entropy = dist.entropy()
-            
-            # Calculate ratio (importance sampling)
-            ratio = torch.exp(new_action_logprobs - old_action_logprobs)
-            
-            # Calculate surrogate losses
-            surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * advantages
-            
-            # Actor loss with entropy bonus
-            actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean()
-            critic_loss = F.mse_loss(self.critic(states).squeeze(), td_targets)
-            
-            # Update networks
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.config.max_grad_norm)
-            self.actor_optimizer.step()
-            
-            self.critic_optimizer.zero_grad()
-            critic_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.config.max_grad_norm)
-            self.critic_optimizer.step()
-            
-            total_actor_loss += actor_loss.item()
-            total_critic_loss += critic_loss.item()
+            for start_idx in range(0, len(states), batch_size):
+                end_idx = min(start_idx + batch_size, len(states))
+                batch_indices = indices[start_idx:end_idx]
+                
+                batch_states = states[batch_indices]
+                batch_actions = actions[batch_indices]
+                batch_old_logprobs = old_action_logprobs[batch_indices]
+                batch_advantages = advantages[batch_indices]
+                batch_returns = returns[batch_indices]
+                
+                # Get current policy predictions
+                action_probs = self.actor(batch_states)
+                dist = torch.distributions.Categorical(action_probs)
+                new_action_logprobs = dist.log_prob(batch_actions)
+                entropy = dist.entropy()
+                
+                # Calculate ratio (importance sampling)
+                ratio = torch.exp(new_action_logprobs - batch_old_logprobs)
+                
+                # Calculate surrogate losses
+                surr1 = ratio * batch_advantages
+                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages
+                
+                # Actor loss with entropy bonus
+                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean()
+                critic_loss = F.mse_loss(self.critic(batch_states).squeeze(), batch_returns)
+                
+                # Update networks
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.config.max_grad_norm)
+                self.actor_optimizer.step()
+                
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.config.max_grad_norm)
+                self.critic_optimizer.step()
+                
+                total_actor_loss += actor_loss.item()
+                total_critic_loss += critic_loss.item()
         
         # Copy new weights to old policy
         self.actor_old.load_state_dict(self.actor.state_dict())
         self.memory.clear()
         
-        return total_actor_loss / self.config.k_epochs, total_critic_loss / self.config.k_epochs
+        num_updates = self.config.k_epochs * ((len(states) + batch_size - 1) // batch_size)
+        return total_actor_loss / num_updates, total_critic_loss / num_updates
     
     def save(self, filepath: str) -> None:
         torch.save({
@@ -267,8 +304,9 @@ class PPO:
 
 
 def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000, 
-                     update_frequency: int = 10, config: Optional[PPOConfig] = None) -> Tuple[PPO, List[float], List[int]]:
-    """Train PPO agent on maze environment."""
+                     update_frequency: int = 10, config: Optional[PPOConfig] = None,
+                     early_stop_success_rate: float = 100.0, early_stop_patience: int = 3) -> Tuple[PPO, List[float], List[int]]:
+    """Train PPO agent on maze environment with early stopping."""
     from env import Environment
     
     # Load the warehouse map
@@ -279,17 +317,19 @@ def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000,
     agent = PPO(config)
     episode_rewards, episode_lengths = [], []
     success_count = 0
-    
+    consecutive_perfect_windows = 0
+        
     print("Starting PPO training on maze environment...")
     print(f"Episodes: {episodes}, Max steps: {max_steps_per_episode}")
     print(f"Update frequency: {update_frequency}")
+    print(f"Early stopping: {early_stop_success_rate}% success rate for {early_stop_patience} consecutive windows")
     print("-" * 60)
     
     for episode in tqdm(range(episodes), desc="Training"):
         state = env.reset()
         episode_reward = 0.0
         episode_length = 0
-        position_history = deque(maxlen=10)  # Anti-loop mechanism
+        position_history = deque(maxlen=4)
         
         for step in range(max_steps_per_episode):
             # Select action
@@ -317,22 +357,35 @@ def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000,
         episode_lengths.append(episode_length)
         
         # Update policy
-        if (episode + 1) % update_frequency == 0:
+        if (episode + 1) % update_frequency == 0 and len(agent.memory) > 0:
             actor_loss, critic_loss = agent.update()
             
-            # Print progress
-            recent_rewards = episode_rewards[-update_frequency:]
-            recent_lengths = episode_lengths[-update_frequency:]
-            avg_reward = np.mean(recent_rewards)
-            avg_length = np.mean(recent_lengths)
-            success_rate = success_count / (episode + 1) * 100
-            recent_success_rate = sum(1 for r in recent_rewards if r > 50) / len(recent_rewards) * 100
-            
-            print(f"Episode {episode + 1}/{episodes}")
-            print(f"  Avg Reward: {avg_reward:.2f}, Avg Length: {avg_length:.2f}")
-            print(f"  Success Rate: {success_rate:.1f}% (Recent: {recent_success_rate:.1f}%)")
-            print(f"  Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}")
-            print("-" * 50)
+            # Print progress less frequently for speed
+            if (episode + 1) % (update_frequency * 4) == 0:
+                recent_rewards = episode_rewards[-update_frequency*4:]
+                recent_lengths = episode_lengths[-update_frequency*4:]
+                avg_reward = np.mean(recent_rewards)
+                avg_length = np.mean(recent_lengths)
+                success_rate = success_count / (episode + 1) * 100
+                recent_success_rate = sum(1 for r in recent_rewards if r > 50) / len(recent_rewards) * 100
+                
+                print(f"Episode {episode + 1}/{episodes}")
+                print(f"  Avg Reward: {avg_reward:.2f}, Avg Length: {avg_length:.2f}")
+                print(f"  Success Rate: {success_rate:.1f}% (Recent: {recent_success_rate:.1f}%)")
+                print(f"  Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}")
+                
+                if recent_success_rate >= early_stop_success_rate:
+                    consecutive_perfect_windows += 1
+                    print(f"  Perfect success rate achieved! ({consecutive_perfect_windows}/{early_stop_patience})")
+                    
+                    if consecutive_perfect_windows >= early_stop_patience:
+                        print(f"\n🎉 EARLY STOPPING: Achieved {early_stop_success_rate}% success rate for {early_stop_patience} consecutive evaluation windows!")
+                        print(f"Training completed at episode {episode + 1}/{episodes}")
+                        break
+                else:
+                    consecutive_perfect_windows = 0
+                
+                print("-" * 50)
     
     agent.save("ppo_maze_model.pth")
     print("Training completed! Model saved as 'ppo_maze_model.pth'")
@@ -340,8 +393,7 @@ def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000,
     return agent, episode_rewards, episode_lengths
 
 
-def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2, 
-                      max_steps: int = 250) -> None:
+def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2, max_steps: int = 250) -> None:
     """Test the trained PPO agent."""
     from env import Environment
     
@@ -361,7 +413,7 @@ def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2
         state = env.reset()
         episode_reward = 0.0
         steps = 0
-        position_history = deque(maxlen=10)
+        position_history = deque(maxlen=4)
         
         env.render()  
         
@@ -394,6 +446,24 @@ def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2
 
 if __name__ == "__main__":
     set_random_seeds(69)
-    config = PPOConfig(lr_actor=1e-3, lr_critic=3e-3, gamma=0.99, clip_epsilon=0.2, k_epochs=4, entropy_coef=0.01)
-    agent, rewards, lengths = train_ppo_on_maze(episodes=1000, max_steps_per_episode=2000, update_frequency=10, config=config)
-    test_trained_agent()
+    config = PPOConfig(
+        hidden_size=128,
+        lr_actor=3e-4, 
+        lr_critic=1e-3, 
+        gamma=0.99, 
+        clip_epsilon=0.2, 
+        k_epochs=4, 
+        entropy_coef=0.01,
+        memory_size=2048,
+        batch_size=64,
+        gae_lambda=0.95
+    )
+    agent, rewards, lengths = train_ppo_on_maze(
+        episodes=500, 
+        max_steps_per_episode=500, 
+        update_frequency=5, 
+        config=config,
+        early_stop_success_rate=100.0, 
+        early_stop_patience=2
+    )
+    test_trained_agent(episodes=6)  
