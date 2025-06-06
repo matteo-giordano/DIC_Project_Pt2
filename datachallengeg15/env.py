@@ -28,7 +28,7 @@ class Maze:
 
         # Agent & Goal positions stored as numpy arrays (-(y+1), x) , so agent_pos = (1.5, 1.5) -> array[-2, 1]
         self.agent_pos = np.array([1.5, 22.5])
-        self.goal_pos = np.array(self.array.shape) - self.agent_pos  
+        self.goal_pos = np.array(self.array.shape) - np.array([2.5, 2.5])
 
         # Rendering attributes
         self.fig = None
@@ -148,11 +148,65 @@ class Maze:
 class Environment:
     def __init__(self, array: np.ndarray, step_size=0.4):
         self.maze = Maze(array=array, step_size=step_size)
+        self.start_pos = self.maze.agent_pos
 
     def step(self, action: int):
         self.maze.step(action)
         return self._get_observation(), self.is_done()
 
+    def _get_observation(self):
+        # Basic position information
+        agent_pos = self.maze.agent_pos.copy()
+        goal_pos = self.maze.goal_pos.copy()
+        
+        # Normalize positions by map size for better learning
+        normalized_agent = agent_pos / np.array([self.maze.map_height, self.maze.map_width])
+        normalized_goal = goal_pos / np.array([self.maze.map_height, self.maze.map_width])
+        
+        # Relative goal position (direction to goal)
+        goal_distance = np.linalg.norm(goal_pos - agent_pos)
+
+        # Local obstacle detection (8 directions around agent)
+        obstacle_info = []
+        for action_idx in range(8):
+            action_vec = self.maze.action_map[action_idx] * self.maze.step_size
+            test_pos = agent_pos + action_vec
+            is_blocked = not self.maze._is_valid_position(test_pos)
+            obstacle_info.append(1.0 if is_blocked else 0.0)
+        
+        # Combine all information
+        observation = np.concatenate([
+            normalized_agent,           # 2 values: normalized agent position  
+            [goal_distance / np.linalg.norm(np.array([self.maze.map_height, self.maze.map_width]))], # 1 value: normalized distance to goal
+            obstacle_info               # 8 values: obstacle detection in each direction
+        ])
+        return observation
+
+    def reset(self):
+        self.maze.agent_pos = self.start_pos + np.random.normal(0, 0.2, size=self.maze.agent_pos.shape)
+        return self._get_observation()
+
+    def render(self):
+        self.maze.render()
+
+    def is_done(self):
+        return np.linalg.norm(self.maze.agent_pos - self.maze.goal_pos) < self.maze.goal_radius
+
+
+class MultiTargetEnvironment(Environment):
+    def __init__(self, array: np.ndarray, step_size=0.4):
+        super().__init__(array=array, step_size=step_size)
+        self.goals = [np.array([16, 37]), np.array([17, 18]), np.array([5, 6]), np.array([2, 35])]
+        self.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
+        self.maze.goal_pos = self.goal_pos
+
+    def reset(self):
+        old_goal_pos = self.maze.goal_pos
+        self.maze.goal_pos = self.maze.goals[np.random.randint(0, len(self.maze.goals))]
+        while np.array_equal(old_goal_pos, self.maze.goal_pos):
+            self.maze.goal_pos = self.maze.goals[np.random.randint(0, len(self.maze.goals))]
+        return self._get_observation()
+    
     def _get_observation(self):
         # Basic position information
         agent_pos = self.maze.agent_pos.copy()
@@ -182,15 +236,6 @@ class Environment:
         ])
         return observation
 
-    def reset(self):
-        self.maze.agent_pos = np.array([1.5, 22.5]) + np.random.normal(0, 0.2, size=self.maze.agent_pos.shape)
-        return self._get_observation()
-
-    def render(self):
-        self.maze.render()
-
-    def is_done(self):
-        return np.linalg.norm(self.maze.agent_pos - self.maze.goal_pos) < self.maze.goal_radius
 
 if __name__ == "__main__":
     from time import sleep
