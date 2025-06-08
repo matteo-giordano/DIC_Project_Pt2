@@ -113,8 +113,8 @@ import numpy as np
 # Configure hyperparameters
 config = PPOConfig(
     hidden_size=128,
-    lr_actor=3e-4,           # Optimized learning rate
-    lr_critic=1e-3,          # Optimized learning rate
+    lr_actor=3e-4,           # Learning rate
+    lr_critic=1e-3,          # Learning rate
     gamma=0.99,
     clip_epsilon=0.2,
     k_epochs=4,
@@ -127,11 +127,11 @@ config = PPOConfig(
 # Train the agent
 agent, rewards, lengths = train_ppo_on_maze(
     episodes=500,                    # Maximum episodes
-    max_steps_per_episode=500,       # Reduced for efficiency
-    update_frequency=5,              # More frequent updates
+    max_steps_per_episode=500,       
+    update_frequency=5,              
     config=config,
-    early_stop_success_rate=100.0,   # Stop at 100% success rate
-    early_stop_patience=2            # Require 2 consecutive perfect windows
+    early_stop_success_rate=100.0,   
+    early_stop_patience=2            
 )
 ```
 
@@ -206,15 +206,15 @@ State observations are 11-dimensional vectors (13 for MultiTargetEnvironment):
 class PPOConfig:
     state_dim: int = 11          # State space dimension
     action_dim: int = 8          # Action space dimension
-    hidden_size: int = 128       # Neural network hidden layer size (optimized)
-    lr_actor: float = 3e-4       # Actor learning rate (optimized)
-    lr_critic: float = 1e-3      # Critic learning rate (optimized)
+    hidden_size: int = 128       # Neural network hidden layer size 
+    lr_actor: float = 3e-4       # Actor learning rate 
+    lr_critic: float = 1e-3      # Critic learning rate 
     gamma: float = 0.99          # Discount factor
     clip_epsilon: float = 0.2    # PPO clipping parameter
     k_epochs: int = 4            # Update epochs per batch
     entropy_coef: float = 0.01   # Entropy regularization coefficient
     max_grad_norm: float = 0.5   # Gradient clipping threshold
-    memory_size: int = 2048      # Experience buffer size (optimized)
+    memory_size: int = 2048      # Experience buffer size 
     batch_size: int = 64         # Mini-batch size for training
     gae_lambda: float = 0.95     # GAE lambda parameter
 ```

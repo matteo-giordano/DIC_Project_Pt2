@@ -10,18 +10,18 @@ class Maze:
             raise ValueError("Invalid array")
         self.array = array.copy()
         self.map_height, self.map_width = self.array.shape
+        diag = 1 / np.sqrt(2)
 
         self.action_map = {
-            0: np.array([1., 0.]),    # North
-            1: np.array([1., 1.]),    # North-East
-            2: np.array([0., 1.]),    # East
-            3: np.array([-1., 1.]),   # South-East
-            4: np.array([-1., 0.]),   # South
-            5: np.array([-1., -1.]),  # South-West
-            6: np.array([0., -1.]),   # West
-            7: np.array([1., -1.]),   # North-West
+            0: np.array([1., 0.]),            # North
+            1: np.array([diag, diag]),        # North-East
+            2: np.array([0., 1.]),            # East
+            3: np.array([-diag, diag]),       # South-East
+            4: np.array([-1., 0.]),           # South
+            5: np.array([-diag, -diag]),      # South-West
+            6: np.array([0., -1.]),           # West
+            7: np.array([diag, -diag]),       # North-West
         }
-
         self.step_size = step_size
         self.goal_radius = 1.
         self.agent_radius = 0.15
@@ -43,7 +43,6 @@ class Maze:
         # Get action & compute new position
         action_vec = self.action_vectors[action]
         new_pos = self.agent_pos + action_vec
-
         # Check collision with walls
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
@@ -224,15 +223,18 @@ class Environment:
 class MultiTargetEnvironment(Environment):
     def __init__(self, array: np.ndarray, step_size=0.4):
         super().__init__(array=array, step_size=step_size)
-        self.goals = [np.array([16, 37]), np.array([17, 18]), np.array([5, 6]), np.array([2, 35])]
-        self.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
+        self.goals = [np.array([15.8, 37]), np.array([17, 18]), np.array([5, 6]), np.array([2, 35])]
+        r = np.random.randint(0, len(self.goals))
+        self.goal_pos = self.goals[r]
+        self.maze.agent_pos = self.goals[(r+1)%len(self.goals)]
         self.maze.goal_pos = self.goal_pos
 
     def reset(self):
         old_goal_pos = self.maze.goal_pos
-        self.maze.goal_pos = self.maze.goals[np.random.randint(0, len(self.maze.goals))]
+        self.maze.agent_pos = old_goal_pos
+        self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
         while np.array_equal(old_goal_pos, self.maze.goal_pos):
-            self.maze.goal_pos = self.maze.goals[np.random.randint(0, len(self.maze.goals))]
+            self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
         return self._get_observation()
     
     def _get_observation(self):
@@ -256,18 +258,17 @@ class MultiTargetEnvironment(Environment):
             normalized_agent,           # 2 values: normalized agent position
             normalized_goal,            # 2 values: normalized goal position  
             [goal_distance / self.map_diagonal_norm], # 1 value: normalized distance to goal
-            obstacle_info               # 8 values: obstacle detection in each direction
+            # obstacle_info               # 8 values: obstacle detection in each direction
         ])
         return observation
 
 
 if __name__ == "__main__":
-    from time import sleep, time
+    from time import sleep
     warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = Environment(warehouse_map)
-    t = time()
-    for _ in range(10000):
+    env = MultiTargetEnvironment(warehouse_map)
+    for _ in range(100):
+        env.render()
         action = np.random.randint(0, 8)
         env.step(action)
-    e = time() - t
-    print(f"Execution time: {e:.4f} seconds")
+        sleep(0.01)
