@@ -21,8 +21,6 @@ class PPOTrainer:
         self.agent = PPO(self.ppo_config)
         self.reward = eval(cfg['reward']['name'])(cfg['reward'])
         self.model_path = cfg['model_path']
-        if self.enable_live_tracking:
-            self.tracker = LiveTracker(update_interval=self.update_frequency, window_size=50)
 
     def _init_env(self, env_config: dict) -> Environment:
         env = eval(env_config['name'])
@@ -38,6 +36,10 @@ class PPOTrainer:
         return env
 
     def train(self):
+        if self.enable_live_tracking:
+            print("Live tracking enabled")
+            self.tracker = LiveTracker(update_interval=self.update_frequency, window_size=50)
+
         episode_rewards, episode_lengths = [], []
         success_count = 0
         consecutive_perfect_windows = 0
