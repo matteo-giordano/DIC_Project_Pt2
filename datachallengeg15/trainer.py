@@ -1,5 +1,6 @@
 import numpy as np
-from ppo import PPOConfig, PPO, LiveTracker
+from ppo import PPOConfig, PPO
+from viz import LiveTracker
 from env import Environment, MultiTargetEnvironment
 from collections import deque
 from tqdm import tqdm
