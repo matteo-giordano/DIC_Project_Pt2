@@ -1,4 +1,3 @@
-from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -192,7 +191,6 @@ class Environment:
         
         # Normalize positions by map size for better learning
         normalized_agent = agent_pos / self.map_size_array
-        normalized_goal = goal_pos / self.map_size_array
         
         # Relative goal position (direction to goal)
         goal_distance = np.linalg.norm(goal_pos - agent_pos)

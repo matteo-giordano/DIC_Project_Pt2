@@ -1,6 +1,6 @@
 # DataChallengeG15 - PPO Maze Navigation
 
-A reinforcement learning framework for training agents to navigate through maze environments using Proximal Policy Optimization (PPO).
+A reinforcement learning framework for training agents to navigate through maze environments using Proximal Policy Optimization (PPO) with a modern configuration-based training system.
 
 ## Installation
 
@@ -25,229 +25,349 @@ pip install -r requirements.txt
 
 ## Overview
 
-This project implements a complete PPO (Proximal Policy Optimization) agent for maze navigation tasks. The framework includes:
+This project implements a complete PPO (Proximal Policy Optimization) agent for maze navigation tasks with a modern, configuration-driven architecture. The framework includes:
 
-- PPO agent with actor-critic networks
-- Continuous maze environment with collision detection
-- Multi-target environment support
-- Training and testing utilities
-- Real-time visualization
+- **Configuration-based training**: YAML config files for easy hyperparameter management
+- **Modular architecture**: Separate classes for environments, rewards, and training
+- **PPO agent**: Actor-critic networks with GAE and experience replay
+- **Multiple environments**: Single and multi-target maze navigation
+- **Live tracking**: Real-time visualization of training metrics
+- **Extensible design**: Base classes for custom environments and reward functions
 
 ## Code Structure
 
-The codebase consists of three main components:
-
-- `ppo.py`: Complete PPO implementation with actor-critic networks, experience replay, and training utilities
-- `env.py`: Maze environment classes with continuous movement and collision detection
-- `warehouse.npy`: Pre-built warehouse maze map for training and testing
-
-## Environment
-
-### Maze Class
-
-The `Maze` class provides a continuous 2D navigation environment with:
-
-- **8-directional movement**: North, Northeast, East, Southeast, South, Southwest, West, Northwest
-- **Collision detection**: Agent cannot move through walls, with sliding mechanics along obstacles
-- **Continuous positioning**: Agent position stored as floating-point coordinates
-- **Real-time rendering**: Matplotlib-based visualization with agent and goal tracking
-
-### Environment Class
-
-The base `Environment` class wraps the maze and provides:
-
-- **State observation**: 11-dimensional state vector including:
-  - Normalized agent position (2 values)
-  - Normalized distance to goal (1 value) 
-  - Obstacle detection in 8 directions (8 values)
-- **Reward calculation**: Distance-based rewards with anti-loop penalties
-- **Episode management**: Reset functionality with position randomization
-
-### MultiTargetEnvironment Class
-
-Extends the base environment with multiple goal positions for varied training:
-
-- **Multiple goals**: 4 predefined target locations in the warehouse
-- **Random goal selection**: Different goal chosen each episode
-- **Enhanced state space**: 13-dimensional observations including goal position
-
-## PPO Implementation
-
-### Agent Architecture
-
-The PPO agent consists of:
-
-- **Actor Network**: Policy network with softmax output for action probabilities
-- **Critic Network**: Value function network for state value estimation
-- **Optimized Experience Buffer**: Pre-allocated NumPy arrays for fast storage and retrieval
-- **Dual optimizers**: Separate Adam optimizers with weight decay regularization
-
-### Key Features
-
-- **Clipped surrogate objective**: Prevents large policy updates
-- **Entropy regularization**: Encourages exploration
-- **Gradient clipping**: Prevents exploding gradients
-- **GAE (Generalized Advantage Estimation)**: Improved advantage calculation with configurable lambda
-- **Mini-batch processing**: Efficient batch training with configurable batch sizes
-- **Early stopping**: Automatic termination when performance targets are met
-- **Configurable hyperparameters**: Easy tuning via PPOConfig class
-
-### Training Process
-
-The training loop includes:
-
-1. **Experience collection**: Agent interacts with environment using optimized memory storage
-2. **Mini-batch updates**: Multiple epochs of policy optimization with batch processing
-3. **Progress tracking**: Episode rewards, success rates, losses, and early stopping monitoring
-4. **Automatic termination**: Training stops when success rate targets are consistently achieved
-5. **Model persistence**: Save/load trained models with full state preservation
+```
+datachallengeg15/
+├── main.py              # Entry point with argument parsing
+├── trainer.py           # PPOTrainer class for training/testing
+├── ppo.py              # PPO agent implementation
+├── env.py              # Environment classes (Maze, Environment, MultiTargetEnvironment)
+├── reward.py           # Reward function classes
+├── viz.py              # Live tracking visualization
+├── config.yaml         # Configuration file
+└── warehouse.npy       # Pre-built warehouse maze map
+```
 
 ## Usage
 
-### Basic Training
+### Training
+
+Train an agent using the configuration file:
+
+```bash
+# Train with default config
+python datachallengeg15/main.py
+
+# Train with custom config
+python datachallengeg15/main.py -c path/to/config.yaml
+
+# Test a trained model
+python datachallengeg15/main.py -t
+```
+
+### Configuration File Structure
+
+The training is controlled by a YAML configuration file (`config.yaml`):
+
+```yaml
+# Global settings
+seed: 69                           # Random seed for reproducibility
+model_path: "ppo_maze_model.pth"   # Path to save/load model
+
+# PPO Agent Configuration
+PPO:
+  state_dim: 5                     # State space dimension (auto-set by environment)
+  action_dim: 8                    # Action space dimension (8 directions)
+  hidden_size: 128                 # Neural network hidden layer size
+  lr_actor: 0.0005                 # Actor learning rate
+  lr_critic: 0.0005                # Critic learning rate
+  gamma: 0.99                      # Discount factor
+  clip_epsilon: 0.2                # PPO clipping parameter
+  k_epochs: 4                      # Update epochs per batch
+  entropy_coef: 0.01               # Entropy regularization coefficient
+  max_grad_norm: 0.5               # Gradient clipping threshold
+  memory_size: 4096                # Experience buffer size
+  batch_size: 64                   # Mini-batch size for training
+  gae_lambda: 0.95                 # GAE lambda parameter
+  recent_history_length: 16        # Position history for loop detection
+
+# Reward Function Configuration
+reward:
+  name: RewardFunction             # Reward function class name
+  args:
+    success_reward: 120.0          # Reward for reaching goal
+    distance_penalty_coef: 0.1     # Distance-based penalty coefficient
+    step_penalty: 0.01             # Per-step penalty
+    loop_penalty: 0.5              # Penalty for revisiting positions
+
+# Training Configuration
+trainer:
+  episodes: 1000                   # Maximum training episodes
+  max_steps: 250                   # Maximum steps per episode
+  update_frequency: 5              # Update agent every N episodes
+  early_stop_success_rate: 100.0   # Success rate threshold for early stopping
+  early_stop_patience: 10          # Consecutive windows needed for early stop
+  enable_live_tracking: true       # Enable real-time visualization
+  test_episodes: 2                 # Number of episodes for testing
+
+# Environment Configuration
+env:
+  map_path: "datachallengeg15/warehouse.npy"  # Path to maze map
+  name: MultiTargetEnvironment     # Environment class name
+  step_size: 0.4                   # Agent movement step size
+  goals: [[15.8, 37], [17, 18], [5, 6], [2, 35]]  # Goals (MultiTargetEnvironment only)
+  start_pos: [15.8, 37]           # Start position (Environment only)
+```
+
+### Configuration Parameters
+
+#### PPO Parameters
+- **state_dim/action_dim**: Automatically set by environment, but can be overridden
+- **hidden_size**: Size of neural network hidden layers (64-256 typical)
+- **lr_actor/lr_critic**: Learning rates (1e-5 to 1e-3 typical)
+- **gamma**: Discount factor for future rewards (0.9-0.999)
+- **clip_epsilon**: PPO clipping parameter (0.1-0.3)
+- **k_epochs**: Number of optimization epochs per update (3-10)
+- **entropy_coef**: Exploration encouragement (0.001-0.1)
+- **memory_size**: Experience buffer size (1024-8192)
+- **batch_size**: Mini-batch size for training (32-128)
+- **gae_lambda**: GAE parameter for advantage estimation (0.9-0.99)
+
+#### Training Parameters
+- **episodes**: Maximum training episodes
+- **max_steps**: Maximum steps per episode
+- **update_frequency**: How often to update the agent (episodes)
+- **early_stop_success_rate**: Success rate threshold for early stopping (%)
+- **early_stop_patience**: Consecutive evaluation windows needed
+- **enable_live_tracking**: Real-time training visualization
+
+## Environments
+
+### Available Environments
+
+1. **Environment**: Single-target maze navigation
+   - Fixed start and goal positions
+   - 5-dimensional state space
+   - Basic distance-based rewards
+
+2. **MultiTargetEnvironment**: Multi-target maze navigation
+   - Multiple goal positions, randomly selected each episode
+   - 5-dimensional state space with goal information
+   - Enhanced training variety
+
+### Environment Features
+
+- **Continuous movement**: Floating-point agent positions
+- **8-directional actions**: North, Northeast, East, Southeast, South, Southwest, West, Northwest
+- **Collision detection**: Wall sliding mechanics
+- **Real-time rendering**: Matplotlib-based visualization
+
+## Implementing Custom Environments
+
+To create a custom environment, extend the base `Environment` class:
 
 ```python
-from datachallengeg15.ppo import train_ppo_on_maze, PPOConfig
+from datachallengeg15.env import Environment
 import numpy as np
 
-# Configure hyperparameters
-config = PPOConfig(
-    hidden_size=128,
-    lr_actor=3e-4,           # Learning rate
-    lr_critic=1e-3,          # Learning rate
-    gamma=0.99,
-    clip_epsilon=0.2,
-    k_epochs=4,
-    entropy_coef=0.01,
-    memory_size=2048,        # Reduced for faster updates
-    batch_size=64,           # Mini-batch size
-    gae_lambda=0.95          # GAE parameter
-)
-
-# Train the agent
-agent, rewards, lengths = train_ppo_on_maze(
-    episodes=500,                    # Maximum episodes
-    max_steps_per_episode=500,       
-    update_frequency=5,              
-    config=config,
-    early_stop_success_rate=100.0,   
-    early_stop_patience=2            
-)
+class CustomEnvironment(Environment):
+    def __init__(self, array: np.ndarray, step_size=0.4, **kwargs):
+        super().__init__(array, step_size)
+        # Add custom initialization
+        self.custom_param = kwargs.get('custom_param', 1.0)
+    
+    def _get_observation(self):
+        """Override to provide custom state representation."""
+        # Get base observation
+        base_obs = super()._get_observation()
+        
+        # Add custom features
+        custom_features = np.array([self.custom_param])
+        
+        return np.concatenate([base_obs, custom_features])
+    
+    def reset(self):
+        """Override to customize reset behavior."""
+        # Custom reset logic
+        self.maze.agent_pos = self._get_random_start_position()
+        self.maze.goal_pos = self._get_random_goal_position()
+        return self._get_observation()
+    
+    def is_done(self):
+        """Override to customize termination conditions."""
+        # Custom termination logic
+        distance = np.linalg.norm(self.maze.agent_pos - self.maze.goal_pos)
+        return distance <= self.maze.goal_radius
 ```
 
-### Testing Trained Agent
+### Using Custom Environments
 
-```python
-from datachallengeg15.ppo import test_trained_agent
-
-# Test the trained model
-test_trained_agent(
-    model_path="ppo_maze_model.pth",
-    episodes=2,
-    max_steps=250
-)
+1. **Add to config file**:
+```yaml
+env:
+  name: CustomEnvironment
+  map_path: "path/to/map.npy"
+  step_size: 0.4
+  custom_param: 2.0  # Custom parameters
 ```
 
-### Custom Environment Usage
+2. **Update state dimension** in PPO config:
+```yaml
+PPO:
+  state_dim: 6  # Adjust based on your observation space
+```
+
+## Implementing Custom Reward Functions
+
+To create a custom reward function, extend the `BaseRewardFunction` class:
 
 ```python
-from datachallengeg15.env import Environment, MultiTargetEnvironment
+from datachallengeg15.reward import BaseRewardFunction
+from datachallengeg15.env import Environment
+from collections import deque
 import numpy as np
 
-# Load warehouse map
-warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-
-# Create single-target environment
-env = Environment(warehouse_map)
-
-# Or create multi-target environment
-multi_env = MultiTargetEnvironment(warehouse_map)
-
-# Basic interaction loop
-state = env.reset()
-for step in range(100):
-    action = np.random.randint(0, 8)  # Random action
-    next_state, done = env.step(action)
-    env.render()  # Visualize
-    if done:
-        break
-    state = next_state
+class CustomRewardFunction(BaseRewardFunction):
+    def __init__(self, config: dict = None):
+        super().__init__(config or {})
+        # Initialize custom parameters from config
+        self.success_reward = self.config.get('success_reward', 100.0)
+        self.custom_penalty = self.config.get('custom_penalty', 1.0)
+    
+    def __call__(self, env: Environment, done: bool, position_history: deque, **kwargs) -> float:
+        """Calculate reward based on current state."""
+        if done:
+            return self.success_reward
+        
+        # Custom reward logic
+        distance = np.linalg.norm(env.maze.agent_pos - env.maze.goal_pos)
+        
+        # Example: Reward based on progress toward goal
+        reward = -distance * 0.1
+        
+        # Example: Custom penalty for specific conditions
+        if self._check_custom_condition(env):
+            reward -= self.custom_penalty
+        
+        return reward
+    
+    def _check_custom_condition(self, env: Environment) -> bool:
+        """Custom condition checking."""
+        # Implement your custom logic
+        return False
 ```
 
-## Data Format
+### Using Custom Reward Functions
 
-### Map Format
-
-Maps are 2D NumPy arrays of type `np.int8` with:
-- `0`: Empty space (navigable)
-- `1`: Wall (obstacle)
-- Odd dimensions with wall boundaries
-
-### Action Format
-
-Actions are integers 0-7 representing 8 directions:
-- `0`: North, `1`: Northeast, `2`: East, `3`: Southeast
-- `4`: South, `5`: Southwest, `6`: West, `7`: Northwest
-
-### State Format
-
-State observations are 11-dimensional vectors (13 for MultiTargetEnvironment):
-- Agent position (normalized): 2 values
-- Goal position (normalized, MultiTarget only): 2 values
-- Distance to goal (normalized): 1 value
-- Obstacle detection (8 directions): 8 values
-
-## Configuration
-
-### PPOConfig Parameters
-
-```python
-@dataclass
-class PPOConfig:
-    state_dim: int = 11          # State space dimension
-    action_dim: int = 8          # Action space dimension
-    hidden_size: int = 128       # Neural network hidden layer size 
-    lr_actor: float = 3e-4       # Actor learning rate 
-    lr_critic: float = 1e-3      # Critic learning rate 
-    gamma: float = 0.99          # Discount factor
-    clip_epsilon: float = 0.2    # PPO clipping parameter
-    k_epochs: int = 4            # Update epochs per batch
-    entropy_coef: float = 0.01   # Entropy regularization coefficient
-    max_grad_norm: float = 0.5   # Gradient clipping threshold
-    memory_size: int = 2048      # Experience buffer size 
-    batch_size: int = 64         # Mini-batch size for training
-    gae_lambda: float = 0.95     # GAE lambda parameter
+Add to config file:
+```yaml
+reward:
+  name: CustomRewardFunction
+  args:
+    success_reward: 150.0
+    custom_penalty: 2.0
 ```
 
-### Early Stopping Parameters
+## Base Classes Reference
 
-```python
-# Early stopping configuration
-early_stop_success_rate: float = 100.0  # Target success rate (%)
-early_stop_patience: int = 2             # Consecutive perfect windows required
+### Environment Base Class
+
+Key methods to override:
+- `_get_observation()`: Return state representation
+- `reset()`: Reset environment to initial state
+- `is_done()`: Check if episode is complete
+- `step(action)`: Execute action and return (next_state, done)
+
+### Reward Function Base Class
+
+Key methods to implement:
+- `__call__(env, done, position_history, **kwargs)`: Calculate reward
+- `__init__(config)`: Initialize from configuration
+
+## Live Tracking
+
+Enable real-time training visualization:
+
+```yaml
+trainer:
+  enable_live_tracking: true
 ```
 
-## Reward Function
-
-The reward system includes:
-
-- **Goal reward**: +120 for reaching the target
-- **Distance penalty**: Proportional to distance from goal (optimized calculation)
-- **Step penalty**: Small negative reward per step (-0.01, reduced)
-- **Loop penalty**: Additional penalty for revisiting recent positions (-0.5)
+Features:
+- Real-time plots of episode rewards, lengths, and losses
+- Automatic plot saving with timestamps
+- Configurable update intervals and window sizes
 
 ## Model Persistence
 
-Trained models are saved as PyTorch state dictionaries containing:
+Models are automatically saved as PyTorch state dictionaries containing:
 - Actor and critic network weights
-- Optimizer states with weight decay
+- Optimizer states
 - Configuration parameters
 - Training metadata
 
 ```python
-# Save model
-agent.save("my_model.pth")
-
-# Load model
-agent.load("my_model.pth")
+# Models are saved automatically during training
+# Load for testing:
+python datachallengeg15/main.py -t
 ```
+
+## Examples
+
+### Basic Training
+```bash
+# Train with default settings
+python datachallengeg15/main.py
+
+# Train with custom config
+python datachallengeg15/main.py -c my_config.yaml
+```
+
+### Testing
+```bash
+# Test trained model
+python datachallengeg15/main.py -t
+
+# Test with custom config
+python datachallengeg15/main.py -c my_config.yaml -t
+```
+
+### Custom Configuration
+Create a custom config file with your preferred settings:
+
+```yaml
+seed: 42
+model_path: "my_model.pth"
+
+PPO:
+  hidden_size: 256
+  lr_actor: 0.0003
+  lr_critic: 0.001
+  memory_size: 8192
+
+trainer:
+  episodes: 2000
+  max_steps: 500
+  enable_live_tracking: false
+
+env:
+  name: Environment
+  step_size: 0.3
+  start_pos: [10, 10]
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **State dimension mismatch**: Ensure `PPO.state_dim` matches your environment's observation space
+2. **Memory issues**: Reduce `memory_size` or `batch_size` for limited RAM
+3. **Slow training**: Disable live tracking or reduce update frequency
+4. **Poor performance**: Adjust learning rates, increase hidden size, or modify reward function
+
+### Performance Tips
+
+- Use GPU acceleration when available (automatic detection)
+- Adjust `update_frequency` based on environment complexity
+- Tune `early_stop_success_rate` and `early_stop_patience` for your task
+- Experiment with different reward function parameters

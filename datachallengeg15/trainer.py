@@ -123,7 +123,7 @@ class PPOTrainer:
             if self.enable_live_tracking:
                 self.tracker.update_plots()
                 saved_path = self.tracker.save_plot()
-                print(f"Live tracking plots updated. Close the plot window when done viewing.")
+                print("Live tracking plots updated. Close the plot window when done viewing.")
                 print(f"Training metrics automatically saved to: {saved_path}")
 
         self.agent.save(self.model_path)

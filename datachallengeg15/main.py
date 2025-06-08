@@ -36,11 +36,9 @@ def main(args: dict):
     set_random_seeds(config['seed'])
     trainer = PPOTrainer(config)
     if args.test:
-        config["trainer"]["enable_live_tracking"] = False
         trainer.test(config['trainer']['test_episodes'], config['trainer']['max_steps'])
     else:
         trainer.train()
-        config["trainer"]["enable_live_tracking"] = False
         trainer.test(config['trainer']['test_episodes'], config['trainer']['max_steps'])
 
 
