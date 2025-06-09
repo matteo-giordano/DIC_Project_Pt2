@@ -16,30 +16,30 @@ from dataclasses import dataclass
 @dataclass
 class PPOConfig:
     """Configuration for PPO hyperparameters."""
-    state_dim: int = 13
-    action_dim: int = 8
-    hidden_size: int = 128  
-    lr_actor: float = 3e-4  
-    lr_critic: float = 1e-3
-    gamma: float = 0.99
-    clip_epsilon: float = 0.2
-    k_epochs: int = 4
-    entropy_coef: float = 0.01
-    max_grad_norm: float = 0.5
-    memory_size: int = 2048  
-    batch_size: int = 64
-    gae_lambda: float = 0.95 
-    recent_history_length: int = 16
+    state_dim: int = 13                 # Dimension of input state (e.g., observation vector)
+    action_dim: int = 8                 # Number of discrete actions
+    hidden_size: int = 128              # Hidden layer size for both networks
+    lr_actor: float = 3e-4              # Learning rate for actor
+    lr_critic: float = 1e-3             # Learning rate for critic
+    gamma: float = 0.99                 # Discount factor
+    clip_epsilon: float = 0.2           # PPO clipping range
+    k_epochs: int = 4                   # Number of epochs per update
+    entropy_coef: float = 0.01          # Entropy bonus coefficient
+    max_grad_norm: float = 0.5          # Gradient clipping threshold
+    memory_size: int = 2048             # Experience buffer capacity
+    batch_size: int = 64                # Mini-batch size
+    gae_lambda: float = 0.95            # Lambda for GAE (bias-variance trade-off)
+    recent_history_length: int = 16     # Position history length (for anti-loop reward)
 
 
 class ActorNetwork(nn.Module):
     """Actor network for policy approximation."""
     def __init__(self, input_size: int, hidden_size: int, output_size: int):
         super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, output_size)
+        self.network = nn.Sequential(                             # A feedforward network with 2 hidden layers
+            nn.Linear(input_size, hidden_size), nn.ReLU(),        # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU Non-linear activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),  # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, output_size)              # Output: hidden_size/2 → output_size (e.g., 64 → 8) (unnormalized logits for actions)
         )
         self._init_weights()
     
@@ -47,11 +47,18 @@ class ActorNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.softmax(self.network(x), dim=-1)
+        """
+        Compute action probabilities π(a|s) from input state.
+        Args:
+            x (Tensor): input state tensor of shape (batch_size, input_size)
+        Returns:
+            Tensor: action probabilities of shape (batch_size, output_size)
+        """
+        return F.softmax(self.network(x), dim=-1) # Normalize output into probability distribution
 
 
 class CriticNetwork(nn.Module):
@@ -59,9 +66,9 @@ class CriticNetwork(nn.Module):
     def __init__(self, input_size: int, hidden_size: int):
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, 1)
+            nn.Linear(input_size, hidden_size), nn.ReLU(),       # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(), # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, 1)                       # Output: scalar value V(s). hidden_size/2 → 1 (e.g., 64 → 1)   
         )
         self._init_weights()
     
@@ -69,20 +76,27 @@ class CriticNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute estimated value V(s) for each input state.
+        Args:
+            x (Tensor): input state of shape (batch_size, input_size)
+        Returns:
+            Tensor: scalar state values of shape (batch_size, 1)
+        """
         return self.network(x)
 
 
 class PPOMemory:
     """Experience replay buffer for PPO with pre-allocated arrays for speed."""
     def __init__(self, max_size: int = 2048, obs_dim: int = 13):
-        self.max_size = max_size
-        self.ptr = 0
-        self.size = 0
-        
+        self.max_size = max_size # Maximum number of transitions to store
+        self.ptr = 0             # Write pointer/index
+        self.size = 0            # Current number of stored transitions
+    
         # Pre-allocate arrays for better performance
         self.states = np.zeros((max_size, obs_dim), dtype=np.float32)
         self.actions = np.zeros(max_size, dtype=np.int32)
@@ -93,6 +107,17 @@ class PPOMemory:
     
     def store(self, state: np.ndarray, action: int, action_logprob: float, 
               reward: float, state_next: np.ndarray, done: bool) -> None:
+        """
+        Store a new transition into the buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log-probability of the action.
+            reward (float): Reward received.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
+        # Insert transition at current pointer
         self.states[self.ptr] = state
         self.actions[self.ptr] = action
         self.action_logprobs[self.ptr] = action_logprob
@@ -100,11 +125,14 @@ class PPOMemory:
         self.states_next[self.ptr] = state_next
         self.dones[self.ptr] = done
         
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)
+        self.ptr = (self.ptr + 1) % self.max_size     # Advance pointer with wraparound
+        self.size = min(self.size + 1, self.max_size) # Track actual number of items stored (capped at max_size)
     
     def get_all(self) -> Tuple[np.ndarray, ...]:
-        """Return all stored transitions as numpy arrays."""
+        """Return all stored transitions as numpy arrays in the buffer.
+        Returns:
+            Tuple of (states, actions, logprobs, rewards, next_states, dones).
+        """
         idx = slice(0, self.size)
         return (self.states[idx], self.actions[idx], self.action_logprobs[idx],
                 self.rewards[idx], self.states_next[idx], self.dones[idx])
@@ -138,7 +166,14 @@ class PPO:
         print(f"PPO Agent initialized on device: {self.device}")
     
     def select_action(self, state: np.ndarray, training: bool = True) -> Tuple[int, float]:
-        """Select action using current policy."""
+        """
+        Select action using current policy (actor network).
+        Args:
+            state (np.ndarray): Current state vector (1D).
+            training (bool): Whether to sample (True) or take argmax (False).
+        Returns:
+            Tuple[int, float]: Chosen action and its log probability.
+        """
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
@@ -154,12 +189,30 @@ class PPO:
     
     def store_transition(self, state: np.ndarray, action: int, action_logprob: float, 
                         reward: float, state_next: np.ndarray, done: bool) -> None:
-        """Store transition in experience buffer."""
+        """
+        Store transition in experience buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log probability of the action.
+            reward (float): Received reward.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
         self.memory.store(state, action, action_logprob, reward, state_next, done)
     
     def _compute_gae_advantages(self, rewards: torch.Tensor, values: torch.Tensor, 
                                values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute advantages using Generalized Advantage Estimation (GAE)."""
+        """
+        Compute advantages using Generalized Advantage Estimation (GAE).
+        Args:
+            rewards (Tensor): Rewards from environment.
+            values (Tensor): Critic estimates for current states.
+            values_next (Tensor): Critic estimates for next states.
+            dones (Tensor): Terminal flags.
+        Returns:
+            Tuple[Tensor, Tensor]: Normalized advantages and returns.
+        """
         advantages = torch.zeros_like(rewards)
         gae = 0
         
