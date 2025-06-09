@@ -197,14 +197,15 @@ class Environment:
 
         new_dist = np.linalg.norm(self.maze.agent_pos - self.maze.goal_pos)
 
-        # Reward shaping
-        progress_reward = (prev_dist - new_dist) * 1.5    # reward for moving closer
-        step_penalty = -0.05                              # small penalty per step
-        goal_bonus = 10.0 if done else -0.05              # bonus for reaching goal
+        # hardcoded
+        # progress_reward = (prev_dist - new_dist) * 1.5    # reward for moving closer
+        # step_penalty = -0.05                              # small penalty per step
+        # goal_bonus = 10.0 if done else -0.05              # bonus for reaching goal
         
-        # progress_reward = (prev_dist - new_dist) * self.reward_cfg["progress"]
-        # step_penalty = self.reward_cfg["step"]
-        # goal_bonus = self.reward_cfg["goal"] if done else 0.0 
+        # uncomment for tune_rewards.py
+        progress_reward = (prev_dist - new_dist) * self.reward_cfg["progress"]
+        step_penalty = self.reward_cfg["step"]
+        goal_bonus = self.reward_cfg["goal"] if done else 0.0 
 
         reward = progress_reward + step_penalty + goal_bonus
         info = {}

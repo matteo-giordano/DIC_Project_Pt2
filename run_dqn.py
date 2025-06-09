@@ -4,7 +4,7 @@ import numpy as np
 
 # Start training
 agent = train_dqn(
-    episodes=200,
+    episodes=1000,
     max_steps=300,
     update_freq=10
 )
