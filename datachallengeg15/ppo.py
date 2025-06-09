@@ -395,7 +395,8 @@ def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000,
 
 def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2, max_steps: int = 250) -> None:
     """Test the trained PPO agent."""
-    from env import Environment
+    #from env import Environment
+    from datachallengeg15.env import Environment
     
     warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
     env = Environment(warehouse_map)
