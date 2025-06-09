@@ -129,7 +129,8 @@ class PPOMemory:
         self.size = min(self.size + 1, self.max_size) # Track actual number of items stored (capped at max_size)
     
     def get_all(self) -> Tuple[np.ndarray, ...]:
-        """Return all stored transitions as numpy arrays in the buffer.
+        """
+        Return all stored transitions as numpy arrays in the buffer.
         Returns:
             Tuple of (states, actions, logprobs, rewards, next_states, dones).
         """
@@ -174,17 +175,18 @@ class PPO:
         Returns:
             Tuple[int, float]: Chosen action and its log probability.
         """
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device) 
         
-        with torch.no_grad():
+        with torch.no_grad(): # Get action probabilities from the old (frozen) actor network
             action_probs = self.actor_old(state_tensor)
             
         if training:
-            # Sample action from probability distribution
+            # Sample action from probability distribution (for exploration)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             return action.item(), dist.log_prob(action).item()
         else:
+            # Deterministic greedy action (for evaluation)
             return torch.argmax(action_probs).item(), 0.0
     
     def store_transition(self, state: np.ndarray, action: int, action_logprob: float, 
@@ -205,32 +207,56 @@ class PPO:
                                values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute advantages using Generalized Advantage Estimation (GAE).
+        This method calculates a more stable and lower-variance estimate of the advantage 
+        function, which helps improve policy learning in PPO.
+        The GAE is computed as:
+            A_t = δ_t + γλ * δ_{t+1} + (γλ)^2 * δ_{t+2} + ...,
+        where:
+            δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
         Args:
-            rewards (Tensor): Rewards from environment.
-            values (Tensor): Critic estimates for current states.
-            values_next (Tensor): Critic estimates for next states.
-            dones (Tensor): Terminal flags.
+            rewards (Tensor): Collected rewards at each timestep.
+            values (Tensor): Critic estimates V(s_t) for current states.
+            values_next (Tensor): Critic estimates V(s_{t+1}) for next states.
+            dones (Tensor): Terminal flags indicating episode terminations.
         Returns:
-            Tuple[Tensor, Tensor]: Normalized advantages and returns.
+            Tuple[Tensor, Tensor]:
+            - advantages (Tensor): Normalized advantage estimates A_t.
+            - returns (Tensor): Estimated return values R_t = A_t + V(s_t).
         """
-        advantages = torch.zeros_like(rewards)
-        gae = 0
+        advantages = torch.zeros_like(rewards) # Placeholder for advantages
+        gae = 0 # GAE accumulator
         
         for t in reversed(range(len(rewards))):
+            # If terminal, no next value (i.e., 0); otherwise use next value from critic
             if t == len(rewards) - 1:
                 next_value = values_next[t] * (~dones[t])
             else:
                 next_value = values[t + 1]
-            
+
+            # Temporal Difference (TD) error δ_t
+            # delta_t = r_t + γ * V(s_{t+1}) - V(s_t)
             delta = rewards[t] + self.config.gamma * next_value - values[t]
+            # Accumulate GAE recursively
+            # A_t = δ_t + γλ(1 - d_t) * A_{t+1}
             gae = delta + self.config.gamma * self.config.gae_lambda * (~dones[t]) * gae
             advantages[t] = gae
-        
-        returns = advantages + values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # Convert to returns: R_t = A_t + V(s_t)
+        returns = advantages + values 
+        # Normalize advantages for stability (mean 0, std 1), avoiding gradient explosion
+        # Â_t = (A_t - mean(A)) / (std(A) + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) 
         return advantages, returns
     
     def update(self) -> Tuple[float, float]:
+        """
+        Perform PPO policy and value function updates.
+        Uses mini-batch updates for a fixed number of epochs 
+        and applies clipped surrogate loss for actor and MSE loss for critic.
+        Returns:
+            Tuple[float, float]: Average actor and critic loss.
+        """
+        # Load stored transitions
         states, actions, action_logprobs, rewards, states_next, dones = self.memory.get_all()
         
         # Convert to tensors
@@ -251,7 +277,7 @@ class PPO:
         
         # Mini-batch training for better efficiency
         batch_size = min(self.config.batch_size, len(states))
-        indices = torch.randperm(len(states))
+        indices = torch.randperm(len(states)) # Shuffle indices
         
         for _ in range(self.config.k_epochs):
             for start_idx in range(0, len(states), batch_size):
@@ -264,24 +290,27 @@ class PPO:
                 batch_advantages = advantages[batch_indices]
                 batch_returns = returns[batch_indices]
                 
-                # Get current policy predictions
+                # Get current policy predictions (Get new action probabilities from current policy)
                 action_probs = self.actor(batch_states)
                 dist = torch.distributions.Categorical(action_probs)
                 new_action_logprobs = dist.log_prob(batch_actions)
                 entropy = dist.entropy()
                 
-                # Calculate ratio (importance sampling)
+                # Calculate importance sampling ratio
+                # r_t(θ) = π_θ(a_t | s_t) / π_θ_old(a_t | s_t) = exp(log(π_θ(a_t | s_t)) - π_θ_old(a_t | s_t))
                 ratio = torch.exp(new_action_logprobs - batch_old_logprobs)
                 
-                # Calculate surrogate losses
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages
+                # Calculate clipped surrogate objective
+                # L_clip(θ) = min(r_t * A_t, clip(r_t, 1 - ε, 1 + ε) * A_t)
+                surr1 = ratio * batch_advantages # r_t * A_t
+                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages # clip(r_t, 1 - ε, 1 + ε) * A_t
+                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean() # L_clip(θ) (actor loss with entropy bonus)
                 
-                # Actor loss with entropy bonus
-                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean()
+                # Compute critic loss 
+                # L_critic = (V(s_t) - R_t)^2    
                 critic_loss = F.mse_loss(self.critic(batch_states).squeeze(), batch_returns)
                 
-                # Update networks
+                # Update networks (actor and critic)
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.config.max_grad_norm)
@@ -297,12 +326,14 @@ class PPO:
         
         # Copy new weights to old policy
         self.actor_old.load_state_dict(self.actor.state_dict())
-        self.memory.clear()
-        
+        self.memory.clear() # Clear memory
+         
+        # Return average loss
         num_updates = self.config.k_epochs * ((len(states) + batch_size - 1) // batch_size)
         return total_actor_loss / num_updates, total_critic_loss / num_updates
     
     def save(self, filepath: str) -> None:
+        """Save current PPO model weights, optimizer states, and config to file."""
         torch.save({
             'actor_state_dict': self.actor.state_dict(),
             'critic_state_dict': self.critic.state_dict(),
@@ -313,6 +344,7 @@ class PPO:
         print(f"Model saved to {filepath}")
     
     def load(self, filepath: str) -> None:
+        """Load PPO model weights, optimizer states, and config from file."""
         checkpoint = torch.load(filepath, map_location=self.device)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
