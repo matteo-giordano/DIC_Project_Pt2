@@ -179,9 +179,11 @@ class Environment:
         # Pre-compute normalization factors for efficiency
         self.map_size_array = np.array([self.maze.map_height, self.maze.map_width])
         self.map_diagonal_norm = np.linalg.norm(self.map_size_array)
+        self.t = 0
 
     def step(self, action: int):
         self.maze.step(action)
+        self.t += 1
         return self._get_observation(), self.is_done()
 
     def _get_observation(self):
@@ -209,6 +211,7 @@ class Environment:
 
     def reset(self):
         self.maze.agent_pos = self.start_pos + np.random.normal(0, 0.2, size=self.maze.agent_pos.shape)
+        self.t = 0
         return self._get_observation()
 
     def render(self):
@@ -228,6 +231,7 @@ class MultiTargetEnvironment(Environment):
         self.maze.goal_pos = self.goal_pos
 
     def reset(self):
+        self.t = 0
         old_goal_pos = self.maze.goal_pos
         self.maze.agent_pos = old_goal_pos
         self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))]

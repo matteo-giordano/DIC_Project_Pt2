@@ -4,7 +4,7 @@ from viz import LiveTracker
 from env import Environment, MultiTargetEnvironment
 from collections import deque
 from tqdm import tqdm
-from reward import RewardFunction
+from reward import *
 
 
 class PPOTrainer:
