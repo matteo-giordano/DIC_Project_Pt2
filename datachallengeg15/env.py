@@ -194,6 +194,7 @@ class Environment:
         # Pre-compute normalization factors for efficiency
         self.map_size_array = np.array([self.maze.map_height, self.maze.map_width])  # [map_height, map_width] for normalization
         self.map_diagonal_norm = np.linalg.norm(self.map_size_array)                 # Euclidean diagonal of the map (normalization factor)
+        self.t = 0
 
     def step(self, action: int):
         self.maze.step(action)
@@ -261,6 +262,7 @@ class MultiTargetEnvironment(Environment):
         Returns:
             np.ndarray: The initial observation after environment reset.
         """
+        self.t = 0
         old_goal_pos = self.maze.goal_pos  # The previous goal position as new start
         self.maze.agent_pos = old_goal_pos # Set agent's position to old goal
         self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))] # Choose a new random goal
