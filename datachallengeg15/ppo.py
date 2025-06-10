@@ -16,30 +16,30 @@ from dataclasses import dataclass
 @dataclass
 class PPOConfig:
     """Configuration for PPO hyperparameters."""
-    state_dim: int = 13
-    action_dim: int = 8
-    hidden_size: int = 128  
-    lr_actor: float = 3e-4  
-    lr_critic: float = 1e-3
-    gamma: float = 0.99
-    clip_epsilon: float = 0.2
-    k_epochs: int = 4
-    entropy_coef: float = 0.01
-    max_grad_norm: float = 0.5
-    memory_size: int = 2048  
-    batch_size: int = 64
-    gae_lambda: float = 0.95 
-    recent_history_length: int = 16
+    state_dim: int = 13                 # Dimension of input state (e.g., observation vector)
+    action_dim: int = 8                 # Number of discrete actions
+    hidden_size: int = 128              # Hidden layer size for both networks
+    lr_actor: float = 3e-4              # Learning rate for actor
+    lr_critic: float = 1e-3             # Learning rate for critic
+    gamma: float = 0.99                 # Discount factor
+    clip_epsilon: float = 0.2           # PPO clipping range
+    k_epochs: int = 4                   # Number of epochs per update
+    entropy_coef: float = 0.01          # Entropy bonus coefficient
+    max_grad_norm: float = 0.5          # Gradient clipping threshold
+    memory_size: int = 2048             # Experience buffer capacity
+    batch_size: int = 64                # Mini-batch size
+    gae_lambda: float = 0.95            # Lambda for GAE (bias-variance trade-off)
+    recent_history_length: int = 16     # Position history length (for anti-loop reward)
 
 
 class ActorNetwork(nn.Module):
     """Actor network for policy approximation."""
     def __init__(self, input_size: int, hidden_size: int, output_size: int):
         super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, output_size)
+        self.network = nn.Sequential(                             # A feedforward network with 2 hidden layers
+            nn.Linear(input_size, hidden_size), nn.ReLU(),        # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU Non-linear activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),  # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, output_size)              # Output: hidden_size/2 → output_size (e.g., 64 → 8) (unnormalized logits for actions)
         )
         self._init_weights()
     
@@ -47,11 +47,18 @@ class ActorNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.softmax(self.network(x), dim=-1)
+        """
+        Compute action probabilities π(a|s) from input state.
+        Args:
+            x (Tensor): input state tensor of shape (batch_size, input_size)
+        Returns:
+            Tensor: action probabilities of shape (batch_size, output_size)
+        """
+        return F.softmax(self.network(x), dim=-1) # Normalize output into probability distribution
 
 
 class CriticNetwork(nn.Module):
@@ -59,9 +66,9 @@ class CriticNetwork(nn.Module):
     def __init__(self, input_size: int, hidden_size: int):
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, 1)
+            nn.Linear(input_size, hidden_size), nn.ReLU(),       # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(), # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, 1)                       # Output: scalar value V(s). hidden_size/2 → 1 (e.g., 64 → 1)   
         )
         self._init_weights()
     
@@ -69,20 +76,27 @@ class CriticNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute estimated value V(s) for each input state.
+        Args:
+            x (Tensor): input state of shape (batch_size, input_size)
+        Returns:
+            Tensor: scalar state values of shape (batch_size, 1)
+        """
         return self.network(x)
 
 
 class PPOMemory:
     """Experience replay buffer for PPO with pre-allocated arrays for speed."""
     def __init__(self, max_size: int = 2048, obs_dim: int = 13):
-        self.max_size = max_size
-        self.ptr = 0
-        self.size = 0
-        
+        self.max_size = max_size # Maximum number of transitions to store
+        self.ptr = 0             # Write pointer/index
+        self.size = 0            # Current number of stored transitions
+    
         # Pre-allocate arrays for better performance
         self.states = np.zeros((max_size, obs_dim), dtype=np.float32)
         self.actions = np.zeros(max_size, dtype=np.int32)
@@ -93,6 +107,17 @@ class PPOMemory:
     
     def store(self, state: np.ndarray, action: int, action_logprob: float, 
               reward: float, state_next: np.ndarray, done: bool) -> None:
+        """
+        Store a new transition into the buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log-probability of the action.
+            reward (float): Reward received.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
+        # Insert transition at current pointer
         self.states[self.ptr] = state
         self.actions[self.ptr] = action
         self.action_logprobs[self.ptr] = action_logprob
@@ -100,11 +125,15 @@ class PPOMemory:
         self.states_next[self.ptr] = state_next
         self.dones[self.ptr] = done
         
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)
+        self.ptr = (self.ptr + 1) % self.max_size     # Advance pointer with wraparound
+        self.size = min(self.size + 1, self.max_size) # Track actual number of items stored (capped at max_size)
     
     def get_all(self) -> Tuple[np.ndarray, ...]:
-        """Return all stored transitions as numpy arrays."""
+        """
+        Return all stored transitions as numpy arrays in the buffer.
+        Returns:
+            Tuple of (states, actions, logprobs, rewards, next_states, dones).
+        """
         idx = slice(0, self.size)
         return (self.states[idx], self.actions[idx], self.action_logprobs[idx],
                 self.rewards[idx], self.states_next[idx], self.dones[idx])
@@ -138,46 +167,96 @@ class PPO:
         print(f"PPO Agent initialized on device: {self.device}")
     
     def select_action(self, state: np.ndarray, training: bool = True) -> Tuple[int, float]:
-        """Select action using current policy."""
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        """
+        Select action using current policy (actor network).
+        Args:
+            state (np.ndarray): Current state vector (1D).
+            training (bool): Whether to sample (True) or take argmax (False).
+        Returns:
+            Tuple[int, float]: Chosen action and its log probability.
+        """
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device) 
         
-        with torch.no_grad():
+        with torch.no_grad(): # Get action probabilities from the old (frozen) actor network
             action_probs = self.actor_old(state_tensor)
             
         if training:
-            # Sample action from probability distribution
+            # Sample action from probability distribution (for exploration)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             return action.item(), dist.log_prob(action).item()
         else:
+            # Deterministic greedy action (for evaluation)
             return torch.argmax(action_probs).item(), 0.0
     
     def store_transition(self, state: np.ndarray, action: int, action_logprob: float, 
                         reward: float, state_next: np.ndarray, done: bool) -> None:
-        """Store transition in experience buffer."""
+        """
+        Store transition in experience buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log probability of the action.
+            reward (float): Received reward.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
         self.memory.store(state, action, action_logprob, reward, state_next, done)
     
     def _compute_gae_advantages(self, rewards: torch.Tensor, values: torch.Tensor, 
                                values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute advantages using Generalized Advantage Estimation (GAE)."""
-        advantages = torch.zeros_like(rewards)
-        gae = 0
+        """
+        Compute advantages using Generalized Advantage Estimation (GAE).
+        This method calculates a more stable and lower-variance estimate of the advantage 
+        function, which helps improve policy learning in PPO.
+        The GAE is computed as:
+            A_t = δ_t + γλ * δ_{t+1} + (γλ)^2 * δ_{t+2} + ...,
+        where:
+            δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
+        Args:
+            rewards (Tensor): Collected rewards at each timestep.
+            values (Tensor): Critic estimates V(s_t) for current states.
+            values_next (Tensor): Critic estimates V(s_{t+1}) for next states.
+            dones (Tensor): Terminal flags indicating episode terminations.
+        Returns:
+            Tuple[Tensor, Tensor]:
+            - advantages (Tensor): Normalized advantage estimates A_t.
+            - returns (Tensor): Estimated return values R_t = A_t + V(s_t).
+        """
+        advantages = torch.zeros_like(rewards) # Placeholder for advantages
+        gae = 0 # GAE accumulator
         
         for t in reversed(range(len(rewards))):
+            # If terminal, no next value (i.e., 0); otherwise use next value from critic
             if t == len(rewards) - 1:
                 next_value = values_next[t] * (~dones[t])
             else:
                 next_value = values[t + 1]
-            
+
+            # Temporal Difference (TD) error δ_t
+            # delta_t = r_t + γ * V(s_{t+1}) - V(s_t)
             delta = rewards[t] + self.config.gamma * next_value - values[t]
+            # Accumulate GAE recursively
+            # A_t = δ_t + γλ(1 - d_t) * A_{t+1}
             gae = delta + self.config.gamma * self.config.gae_lambda * (~dones[t]) * gae
             advantages[t] = gae
-        
-        returns = advantages + values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # Convert to returns: R_t = A_t + V(s_t)
+        returns = advantages + values 
+        # Normalize advantages for stability (mean 0, std 1), avoiding gradient explosion
+        # Â_t = (A_t - mean(A)) / (std(A) + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) 
         return advantages, returns
     
     def update(self) -> Tuple[float, float]:
+        """
+        Perform PPO policy and value function updates.
+        Uses mini-batch updates for a fixed number of epochs 
+        and applies clipped surrogate loss for actor and MSE loss for critic.
+        Returns:
+            Tuple[float, float]: Average actor and critic loss.
+        """
+        # Load stored transitions
         states, actions, action_logprobs, rewards, states_next, dones = self.memory.get_all()
         
         # Convert to tensors
@@ -198,7 +277,7 @@ class PPO:
         
         # Mini-batch training for better efficiency
         batch_size = min(self.config.batch_size, len(states))
-        indices = torch.randperm(len(states))
+        indices = torch.randperm(len(states)) # Shuffle indices
         
         for _ in range(self.config.k_epochs):
             for start_idx in range(0, len(states), batch_size):
@@ -211,24 +290,27 @@ class PPO:
                 batch_advantages = advantages[batch_indices]
                 batch_returns = returns[batch_indices]
                 
-                # Get current policy predictions
+                # Get current policy predictions (Get new action probabilities from current policy)
                 action_probs = self.actor(batch_states)
                 dist = torch.distributions.Categorical(action_probs)
                 new_action_logprobs = dist.log_prob(batch_actions)
                 entropy = dist.entropy()
                 
-                # Calculate ratio (importance sampling)
+                # Calculate importance sampling ratio
+                # r_t(θ) = π_θ(a_t | s_t) / π_θ_old(a_t | s_t) = exp(log(π_θ(a_t | s_t)) - π_θ_old(a_t | s_t))
                 ratio = torch.exp(new_action_logprobs - batch_old_logprobs)
                 
-                # Calculate surrogate losses
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages
+                # Calculate clipped surrogate objective
+                # L_clip(θ) = min(r_t * A_t, clip(r_t, 1 - ε, 1 + ε) * A_t)
+                surr1 = ratio * batch_advantages # r_t * A_t
+                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages # clip(r_t, 1 - ε, 1 + ε) * A_t
+                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean() # L_clip(θ) (actor loss with entropy bonus)
                 
-                # Actor loss with entropy bonus
-                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean()
+                # Compute critic loss 
+                # L_critic = (V(s_t) - R_t)^2    
                 critic_loss = F.mse_loss(self.critic(batch_states).squeeze(), batch_returns)
                 
-                # Update networks
+                # Update networks (actor and critic)
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.config.max_grad_norm)
@@ -244,12 +326,14 @@ class PPO:
         
         # Copy new weights to old policy
         self.actor_old.load_state_dict(self.actor.state_dict())
-        self.memory.clear()
-        
+        self.memory.clear() # Clear memory
+         
+        # Return average loss
         num_updates = self.config.k_epochs * ((len(states) + batch_size - 1) // batch_size)
         return total_actor_loss / num_updates, total_critic_loss / num_updates
     
     def save(self, filepath: str) -> None:
+        """Save current PPO model weights, optimizer states, and config to file."""
         torch.save({
             'actor_state_dict': self.actor.state_dict(),
             'critic_state_dict': self.critic.state_dict(),
@@ -260,6 +344,7 @@ class PPO:
         print(f"Model saved to {filepath}")
     
     def load(self, filepath: str) -> None:
+        """Load PPO model weights, optimizer states, and config from file."""
         checkpoint = torch.load(filepath, map_location=self.device)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
