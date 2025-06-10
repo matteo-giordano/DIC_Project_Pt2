@@ -10,70 +10,36 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-from collections import deque
-from typing import Tuple, List, Optional
+from typing import Tuple, Optional
 from dataclasses import dataclass
-import random
-from tqdm import tqdm
-
 
 @dataclass
 class PPOConfig:
     """Configuration for PPO hyperparameters."""
-    state_dim: int = 11
-    action_dim: int = 8
-    hidden_size: int = 128  
-    lr_actor: float = 3e-4  
-    lr_critic: float = 1e-3
-    gamma: float = 0.99
-    clip_epsilon: float = 0.2
-    k_epochs: int = 4
-    entropy_coef: float = 0.01
-    max_grad_norm: float = 0.5
-    memory_size: int = 2048  
-    batch_size: int = 64
-    gae_lambda: float = 0.95 
-
-
-def set_random_seeds(seed: int) -> None:
-    """Set random seeds for reproducible results."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    # Make PyTorch deterministic (may impact performance)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-
-def calculate_reward(env, done: bool, position_history: deque, current_distance: float) -> float:
-    """Calculate reward with improved shaping and anti-loop mechanism."""
-    map_diagonal = 46 # TODO: hardcoded for efficiency
-    current_pos = tuple(env.maze.agent_pos)
-    position_history.append(current_pos)
-    
-    if done:
-        return 120.0
-    # Distance normalization and penalties
-    normalized_distance = current_distance / map_diagonal
-    reward = -normalized_distance * 0.1 - 0.01  
-    
-    # Simplified anti-loop penalty
-    if len(position_history) >= 3 and current_pos in list(position_history)[-3:-1]:
-        reward -= 0.5
-    return reward
+    state_dim: int = 13                 # Dimension of input state (e.g., observation vector)
+    action_dim: int = 8                 # Number of discrete actions
+    hidden_size: int = 128              # Hidden layer size for both networks
+    lr_actor: float = 3e-4              # Learning rate for actor
+    lr_critic: float = 1e-3             # Learning rate for critic
+    gamma: float = 0.99                 # Discount factor
+    clip_epsilon: float = 0.2           # PPO clipping range
+    k_epochs: int = 4                   # Number of epochs per update
+    entropy_coef: float = 0.01          # Entropy bonus coefficient
+    max_grad_norm: float = 0.5          # Gradient clipping threshold
+    memory_size: int = 2048             # Experience buffer capacity
+    batch_size: int = 64                # Mini-batch size
+    gae_lambda: float = 0.95            # Lambda for GAE (bias-variance trade-off)
+    recent_history_length: int = 16     # Position history length (for anti-loop reward)
 
 
 class ActorNetwork(nn.Module):
     """Actor network for policy approximation."""
     def __init__(self, input_size: int, hidden_size: int, output_size: int):
         super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, output_size)
+        self.network = nn.Sequential(                             # A feedforward network with 2 hidden layers
+            nn.Linear(input_size, hidden_size), nn.ReLU(),        # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU Non-linear activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),  # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, output_size)              # Output: hidden_size/2 → output_size (e.g., 64 → 8) (unnormalized logits for actions)
         )
         self._init_weights()
     
@@ -81,11 +47,18 @@ class ActorNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.softmax(self.network(x), dim=-1)
+        """
+        Compute action probabilities π(a|s) from input state.
+        Args:
+            x (Tensor): input state tensor of shape (batch_size, input_size)
+        Returns:
+            Tensor: action probabilities of shape (batch_size, output_size)
+        """
+        return F.softmax(self.network(x), dim=-1) # Normalize output into probability distribution
 
 
 class CriticNetwork(nn.Module):
@@ -93,9 +66,9 @@ class CriticNetwork(nn.Module):
     def __init__(self, input_size: int, hidden_size: int):
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(),
-            nn.Linear(hidden_size // 2, 1)
+            nn.Linear(input_size, hidden_size), nn.ReLU(),       # Layer 1: state → hidden_size (e.g., 13 → 128) + ReLU activation
+            nn.Linear(hidden_size, hidden_size // 2), nn.ReLU(), # Layer 2: hidden_size → hidden_size/2 (e.g., 128 → 64) + ReLU activation
+            nn.Linear(hidden_size // 2, 1)                       # Output: scalar value V(s). hidden_size/2 → 1 (e.g., 64 → 1)   
         )
         self._init_weights()
     
@@ -103,30 +76,48 @@ class CriticNetwork(nn.Module):
         """Initialize network weights using Xavier initialization."""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                nn.init.constant_(module.bias, 0.0)
+                nn.init.xavier_uniform_(module.weight) # Xavier for stable gradients
+                nn.init.constant_(module.bias, 0.0)    # Zero bias
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute estimated value V(s) for each input state.
+        Args:
+            x (Tensor): input state of shape (batch_size, input_size)
+        Returns:
+            Tensor: scalar state values of shape (batch_size, 1)
+        """
         return self.network(x)
 
 
 class PPOMemory:
     """Experience replay buffer for PPO with pre-allocated arrays for speed."""
-    def __init__(self, max_size: int = 2048):
-        self.max_size = max_size
-        self.ptr = 0
-        self.size = 0
-        
+    def __init__(self, max_size: int = 2048, obs_dim: int = 13):
+        self.max_size = max_size # Maximum number of transitions to store
+        self.ptr = 0             # Write pointer/index
+        self.size = 0            # Current number of stored transitions
+    
         # Pre-allocate arrays for better performance
-        self.states = np.zeros((max_size, 11), dtype=np.float32)
+        self.states = np.zeros((max_size, obs_dim), dtype=np.float32)
         self.actions = np.zeros(max_size, dtype=np.int32)
         self.action_logprobs = np.zeros(max_size, dtype=np.float32)
         self.rewards = np.zeros(max_size, dtype=np.float32)
-        self.states_next = np.zeros((max_size, 11), dtype=np.float32)
+        self.states_next = np.zeros((max_size, obs_dim), dtype=np.float32)
         self.dones = np.zeros(max_size, dtype=bool)
     
     def store(self, state: np.ndarray, action: int, action_logprob: float, 
               reward: float, state_next: np.ndarray, done: bool) -> None:
+        """
+        Store a new transition into the buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log-probability of the action.
+            reward (float): Reward received.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
+        # Insert transition at current pointer
         self.states[self.ptr] = state
         self.actions[self.ptr] = action
         self.action_logprobs[self.ptr] = action_logprob
@@ -134,11 +125,15 @@ class PPOMemory:
         self.states_next[self.ptr] = state_next
         self.dones[self.ptr] = done
         
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)
+        self.ptr = (self.ptr + 1) % self.max_size     # Advance pointer with wraparound
+        self.size = min(self.size + 1, self.max_size) # Track actual number of items stored (capped at max_size)
     
     def get_all(self) -> Tuple[np.ndarray, ...]:
-        """Return all stored transitions as numpy arrays."""
+        """
+        Return all stored transitions as numpy arrays in the buffer.
+        Returns:
+            Tuple of (states, actions, logprobs, rewards, next_states, dones).
+        """
         idx = slice(0, self.size)
         return (self.states[idx], self.actions[idx], self.action_logprobs[idx],
                 self.rewards[idx], self.states_next[idx], self.dones[idx])
@@ -168,50 +163,100 @@ class PPO:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.config.lr_actor, weight_decay=1e-5)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.config.lr_critic, weight_decay=1e-5)
         
-        self.memory = PPOMemory(self.config.memory_size)
+        self.memory = PPOMemory(self.config.memory_size, self.config.state_dim)
         print(f"PPO Agent initialized on device: {self.device}")
     
     def select_action(self, state: np.ndarray, training: bool = True) -> Tuple[int, float]:
-        """Select action using current policy."""
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        """
+        Select action using current policy (actor network).
+        Args:
+            state (np.ndarray): Current state vector (1D).
+            training (bool): Whether to sample (True) or take argmax (False).
+        Returns:
+            Tuple[int, float]: Chosen action and its log probability.
+        """
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device) 
         
-        with torch.no_grad():
+        with torch.no_grad(): # Get action probabilities from the old (frozen) actor network
             action_probs = self.actor_old(state_tensor)
             
         if training:
-            # Sample action from probability distribution
+            # Sample action from probability distribution (for exploration)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             return action.item(), dist.log_prob(action).item()
         else:
+            # Deterministic greedy action (for evaluation)
             return torch.argmax(action_probs).item(), 0.0
     
     def store_transition(self, state: np.ndarray, action: int, action_logprob: float, 
                         reward: float, state_next: np.ndarray, done: bool) -> None:
-        """Store transition in experience buffer."""
+        """
+        Store transition in experience buffer.
+        Args:
+            state (np.ndarray): Current state.
+            action (int): Action taken.
+            action_logprob (float): Log probability of the action.
+            reward (float): Received reward.
+            state_next (np.ndarray): Next state.
+            done (bool): Whether the episode has ended.
+        """
         self.memory.store(state, action, action_logprob, reward, state_next, done)
     
     def _compute_gae_advantages(self, rewards: torch.Tensor, values: torch.Tensor, 
                                values_next: torch.Tensor, dones: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute advantages using Generalized Advantage Estimation (GAE)."""
-        advantages = torch.zeros_like(rewards)
-        gae = 0
+        """
+        Compute advantages using Generalized Advantage Estimation (GAE).
+        This method calculates a more stable and lower-variance estimate of the advantage 
+        function, which helps improve policy learning in PPO.
+        The GAE is computed as:
+            A_t = δ_t + γλ * δ_{t+1} + (γλ)^2 * δ_{t+2} + ...,
+        where:
+            δ_t = r_t + γ * V(s_{t+1}) - V(s_t)
+        Args:
+            rewards (Tensor): Collected rewards at each timestep.
+            values (Tensor): Critic estimates V(s_t) for current states.
+            values_next (Tensor): Critic estimates V(s_{t+1}) for next states.
+            dones (Tensor): Terminal flags indicating episode terminations.
+        Returns:
+            Tuple[Tensor, Tensor]:
+            - advantages (Tensor): Normalized advantage estimates A_t.
+            - returns (Tensor): Estimated return values R_t = A_t + V(s_t).
+        """
+        advantages = torch.zeros_like(rewards) # Placeholder for advantages
+        gae = 0 # GAE accumulator
         
         for t in reversed(range(len(rewards))):
+            # If terminal, no next value (i.e., 0); otherwise use next value from critic
             if t == len(rewards) - 1:
                 next_value = values_next[t] * (~dones[t])
             else:
                 next_value = values[t + 1]
-            
+
+            # Temporal Difference (TD) error δ_t
+            # delta_t = r_t + γ * V(s_{t+1}) - V(s_t)
             delta = rewards[t] + self.config.gamma * next_value - values[t]
+            # Accumulate GAE recursively
+            # A_t = δ_t + γλ(1 - d_t) * A_{t+1}
             gae = delta + self.config.gamma * self.config.gae_lambda * (~dones[t]) * gae
             advantages[t] = gae
-        
-        returns = advantages + values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # Convert to returns: R_t = A_t + V(s_t)
+        returns = advantages + values 
+        # Normalize advantages for stability (mean 0, std 1), avoiding gradient explosion
+        # Â_t = (A_t - mean(A)) / (std(A) + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) 
         return advantages, returns
     
     def update(self) -> Tuple[float, float]:
+        """
+        Perform PPO policy and value function updates.
+        Uses mini-batch updates for a fixed number of epochs 
+        and applies clipped surrogate loss for actor and MSE loss for critic.
+        Returns:
+            Tuple[float, float]: Average actor and critic loss.
+        """
+        # Load stored transitions
         states, actions, action_logprobs, rewards, states_next, dones = self.memory.get_all()
         
         # Convert to tensors
@@ -232,7 +277,7 @@ class PPO:
         
         # Mini-batch training for better efficiency
         batch_size = min(self.config.batch_size, len(states))
-        indices = torch.randperm(len(states))
+        indices = torch.randperm(len(states)) # Shuffle indices
         
         for _ in range(self.config.k_epochs):
             for start_idx in range(0, len(states), batch_size):
@@ -245,24 +290,27 @@ class PPO:
                 batch_advantages = advantages[batch_indices]
                 batch_returns = returns[batch_indices]
                 
-                # Get current policy predictions
+                # Get current policy predictions (Get new action probabilities from current policy)
                 action_probs = self.actor(batch_states)
                 dist = torch.distributions.Categorical(action_probs)
                 new_action_logprobs = dist.log_prob(batch_actions)
                 entropy = dist.entropy()
                 
-                # Calculate ratio (importance sampling)
+                # Calculate importance sampling ratio
+                # r_t(θ) = π_θ(a_t | s_t) / π_θ_old(a_t | s_t) = exp(log(π_θ(a_t | s_t)) - π_θ_old(a_t | s_t))
                 ratio = torch.exp(new_action_logprobs - batch_old_logprobs)
                 
-                # Calculate surrogate losses
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages
+                # Calculate clipped surrogate objective
+                # L_clip(θ) = min(r_t * A_t, clip(r_t, 1 - ε, 1 + ε) * A_t)
+                surr1 = ratio * batch_advantages # r_t * A_t
+                surr2 = torch.clamp(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon) * batch_advantages # clip(r_t, 1 - ε, 1 + ε) * A_t
+                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean() # L_clip(θ) (actor loss with entropy bonus)
                 
-                # Actor loss with entropy bonus
-                actor_loss = -torch.min(surr1, surr2).mean() - self.config.entropy_coef * entropy.mean()
+                # Compute critic loss 
+                # L_critic = (V(s_t) - R_t)^2    
                 critic_loss = F.mse_loss(self.critic(batch_states).squeeze(), batch_returns)
                 
-                # Update networks
+                # Update networks (actor and critic)
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.config.max_grad_norm)
@@ -278,12 +326,14 @@ class PPO:
         
         # Copy new weights to old policy
         self.actor_old.load_state_dict(self.actor.state_dict())
-        self.memory.clear()
-        
+        self.memory.clear() # Clear memory
+         
+        # Return average loss
         num_updates = self.config.k_epochs * ((len(states) + batch_size - 1) // batch_size)
         return total_actor_loss / num_updates, total_critic_loss / num_updates
     
     def save(self, filepath: str) -> None:
+        """Save current PPO model weights, optimizer states, and config to file."""
         torch.save({
             'actor_state_dict': self.actor.state_dict(),
             'critic_state_dict': self.critic.state_dict(),
@@ -294,6 +344,7 @@ class PPO:
         print(f"Model saved to {filepath}")
     
     def load(self, filepath: str) -> None:
+        """Load PPO model weights, optimizer states, and config from file."""
         checkpoint = torch.load(filepath, map_location=self.device)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
@@ -301,169 +352,3 @@ class PPO:
         self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
         self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         print(f"Model loaded from {filepath}")
-
-
-def train_ppo_on_maze(episodes: int = 2000, max_steps_per_episode: int = 1000, 
-                     update_frequency: int = 10, config: Optional[PPOConfig] = None,
-                     early_stop_success_rate: float = 100.0, early_stop_patience: int = 3) -> Tuple[PPO, List[float], List[int]]:
-    """Train PPO agent on maze environment with early stopping."""
-    from env import Environment
-    
-    # Load the warehouse map
-    warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = Environment(warehouse_map)
-    
-    # Initialize PPO agent and tracking variables
-    agent = PPO(config)
-    episode_rewards, episode_lengths = [], []
-    success_count = 0
-    consecutive_perfect_windows = 0
-        
-    print("Starting PPO training on maze environment...")
-    print(f"Episodes: {episodes}, Max steps: {max_steps_per_episode}")
-    print(f"Update frequency: {update_frequency}")
-    print(f"Early stopping: {early_stop_success_rate}% success rate for {early_stop_patience} consecutive windows")
-    print("-" * 60)
-    
-    for episode in tqdm(range(episodes), desc="Training"):
-        state = env.reset()
-        episode_reward = 0.0
-        episode_length = 0
-        position_history = deque(maxlen=4)
-        
-        for step in range(max_steps_per_episode):
-            # Select action
-            action, action_logprob = agent.select_action(state, training=True)
-            
-            # Take step in environment
-            next_state, done = env.step(action)
-            
-            # Calculate reward
-            current_distance = np.linalg.norm(env.maze.agent_pos - env.maze.goal_pos)
-            reward = calculate_reward(env, done, position_history, current_distance)
-            
-            # Store transition
-            agent.store_transition(state, action, action_logprob, reward, next_state, done)
-            
-            state = next_state
-            episode_reward += reward
-            episode_length += 1
-            
-            if done:
-                success_count += 1
-                break
-        
-        episode_rewards.append(episode_reward)
-        episode_lengths.append(episode_length)
-        
-        # Update policy
-        if (episode + 1) % update_frequency == 0 and len(agent.memory) > 0:
-            actor_loss, critic_loss = agent.update()
-            
-            # Print progress less frequently for speed
-            if (episode + 1) % (update_frequency * 4) == 0:
-                recent_rewards = episode_rewards[-update_frequency*4:]
-                recent_lengths = episode_lengths[-update_frequency*4:]
-                avg_reward = np.mean(recent_rewards)
-                avg_length = np.mean(recent_lengths)
-                success_rate = success_count / (episode + 1) * 100
-                recent_success_rate = sum(1 for r in recent_rewards if r > 50) / len(recent_rewards) * 100
-                
-                print(f"Episode {episode + 1}/{episodes}")
-                print(f"  Avg Reward: {avg_reward:.2f}, Avg Length: {avg_length:.2f}")
-                print(f"  Success Rate: {success_rate:.1f}% (Recent: {recent_success_rate:.1f}%)")
-                print(f"  Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}")
-                
-                if recent_success_rate >= early_stop_success_rate:
-                    consecutive_perfect_windows += 1
-                    print(f"  Perfect success rate achieved! ({consecutive_perfect_windows}/{early_stop_patience})")
-                    
-                    if consecutive_perfect_windows >= early_stop_patience:
-                        print(f"\n🎉 EARLY STOPPING: Achieved {early_stop_success_rate}% success rate for {early_stop_patience} consecutive evaluation windows!")
-                        print(f"Training completed at episode {episode + 1}/{episodes}")
-                        break
-                else:
-                    consecutive_perfect_windows = 0
-                
-                print("-" * 50)
-    
-    agent.save("ppo_maze_model.pth")
-    print("Training completed! Model saved as 'ppo_maze_model.pth'")
-    
-    return agent, episode_rewards, episode_lengths
-
-
-def test_trained_agent(model_path: str = "ppo_maze_model.pth", episodes: int = 2, max_steps: int = 250) -> None:
-    """Test the trained PPO agent."""
-    from env import Environment
-    
-    warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = Environment(warehouse_map)
-    
-    # Load trained agent
-    agent = PPO()
-    agent.load(model_path)
-    
-    print(f"Testing PPO agent: Start {env.maze.agent_pos}, Goal {env.maze.goal_pos}")
-    print("-" * 50)
-    
-    success_count = total_steps = 0
-    
-    for episode in range(episodes):
-        state = env.reset()
-        episode_reward = 0.0
-        steps = 0
-        position_history = deque(maxlen=4)
-        
-        env.render()  
-        
-        done = False
-        while steps < max_steps and not done:
-            action, _ = agent.select_action(state, training=False)
-            next_state, done = env.step(action)
-            
-            current_distance = np.linalg.norm(env.maze.agent_pos - env.maze.goal_pos)
-            reward = calculate_reward(env, done, position_history, current_distance)
-            
-            episode_reward += reward
-            steps += 1
-            
-            env.render()
-            state = next_state
-        
-        total_steps += steps
-        
-        if done:
-            success_count += 1
-            print(f"Episode {episode + 1}: SUCCESS in {steps} steps! Reward: {episode_reward:.2f}")
-        else:
-            print(f"Episode {episode + 1}: FAILED after {steps} steps. Reward: {episode_reward:.2f}")
-    
-    print("-" * 50)
-    print(f"Results: {success_count}/{episodes} successful ({success_count/episodes*100:.1f}%)")
-    print(f"Average Steps: {total_steps/episodes:.1f}")
-
-
-if __name__ == "__main__":
-    set_random_seeds(69)
-    config = PPOConfig(
-        hidden_size=128,
-        lr_actor=3e-4, 
-        lr_critic=1e-3, 
-        gamma=0.99, 
-        clip_epsilon=0.2, 
-        k_epochs=4, 
-        entropy_coef=0.01,
-        memory_size=2048,
-        batch_size=64,
-        gae_lambda=0.95
-    )
-    agent, rewards, lengths = train_ppo_on_maze(
-        episodes=500, 
-        max_steps_per_episode=500, 
-        update_frequency=5, 
-        config=config,
-        early_stop_success_rate=100.0, 
-        early_stop_patience=2
-    )
-    test_trained_agent(episodes=6)  
