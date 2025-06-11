@@ -1,0 +1,33 @@
+seed: 42
+model_path: "dqn_maze_model.pth"
+
+DQN:
+  state_dim: 11
+  action_dim: 8
+  hidden_size: 128
+  learning_rate: 0.001
+  gamma: 0.99
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay: 500
+  batch_size: 64
+  memory_size: 10000
+  target_update_frequency: 10
+
+reward:
+  progress: 2.0
+  step: -0.05
+  goal: 30.0
+
+trainer:
+  episodes: 1000
+  max_steps: 250
+  enable_live_tracking: true
+  test_episodes: 2
+
+env:
+  map_path: "datachallengeg15/warehouse.npy"
+  name: Environment
+  step_size: 0.4
+  goals: [[15.8, 37], [17, 18], [5, 6], [2, 35]]
+  start_pos: [15.8, 37]

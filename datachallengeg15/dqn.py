@@ -4,7 +4,7 @@ import random
 import numpy as np
 import torch
 import torch.optim as optim
-from datachallengeg15.env_dqn import Environment
+from env_dqn import Environment
 
 class QNetwork(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -81,32 +81,89 @@ class DQNAgent:
 
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min) 
+    
+    def save(self, path: str):
+        torch.save(self.q_net.state_dict(), path)
 
-def train_dqn(episodes=500, max_steps=250, update_freq=10):
-    maze = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = Environment(maze)
-    observation_dim = len(env.reset()) # infer from first observation
-    action_dim = 8 # it's 8 directions
-    agent = DQNAgent(observation_dim, action_dim)
+    def load(self, path: str):
+        self.q_net.load_state_dict(torch.load(path))
+        self.target_net.load_state_dict(self.q_net.state_dict())
+
+# def train_dqn(episodes=500, max_steps=250, update_freq=10):
+#     maze = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
+#     env = Environment(maze)
+#     observation_dim = len(env.reset()) # infer from first observation
+#     action_dim = 8 # it's 8 directions
+#     agent = DQNAgent(observation_dim, action_dim)
+
+#     for ep in range(episodes):
+#         state = env.reset()
+#         total_reward = 0
+#         for step in range(max_steps):
+#             action = agent.select_action(state)
+#             next_state, reward, done, _ = env.step(action)
+#             agent.replay.store((state, action, reward, next_state, float(done)))
+#             agent.train()
+#             state = next_state
+#             total_reward += reward
+#             if done:
+#                 break
+
+#         if ep % update_freq == 0:
+#             agent.update_target()
+#         agent.decay_epsilon()
+#         print(f"Episode {ep}, reward: {total_reward:.2f}, epsilon: {agent.epsilon:.2f}")   
+#     return agent
+
+def train_dqn(config: dict):
+    # Load environment
+    maze = np.load(config['env']['map_path']).astype(np.int8)
+    env = Environment(maze, step_size=config['env'].get('step_size', 0.4), reward_config=config['reward'])
+    
+    # Get observation/action dimensions from environment
+    obs_dim = len(env.reset())
+    action_dim = config['DQN'].get('action_dim', 8)
+
+    # Initialize agent with config values
+    agent = DQNAgent(
+        state_dim=obs_dim,
+        action_dim=action_dim,
+        lr=config['DQN']['learning_rate'],
+        gamma=config['DQN']['gamma'],
+        epsilon=config['DQN']['epsilon_start'],
+        epsilon_decay=np.exp(np.log(config['DQN']['epsilon_end'] / config['DQN']['epsilon_start']) / config['DQN']['epsilon_decay']),
+        epsilon_min=config['DQN']['epsilon_end']
+    )
+
+    # Training loop
+    episodes = config['trainer']['episodes']
+    max_steps = config['trainer']['max_steps']
+    update_freq = config['DQN']['target_update_frequency']
 
     for ep in range(episodes):
         state = env.reset()
         total_reward = 0
+
         for step in range(max_steps):
             action = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
+
             agent.replay.store((state, action, reward, next_state, float(done)))
-            agent.train()
+            agent.train(batch_size=config['DQN']['batch_size'])
+
             state = next_state
             total_reward += reward
+
             if done:
                 break
 
         if ep % update_freq == 0:
             agent.update_target()
         agent.decay_epsilon()
-        print(f"Episode {ep}, reward: {total_reward:.2f}, epsilon: {agent.epsilon:.2f}")   
-    return agent
+
+        print(f"Episode {ep}, reward: {total_reward:.2f}, epsilon: {agent.epsilon:.2f}")
+
+    return agent, env
 
 def test_dqn_agent(agent, env, episodes=3, max_steps=250, return_metrics=False):
     success_count = total_steps = 0

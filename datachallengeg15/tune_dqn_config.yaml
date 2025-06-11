@@ -1,0 +1,8 @@
+search_space:
+  DQN.learning_rate: [0.001, 0.0005]
+  DQN.gamma: [0.95, 0.99]
+  reward.args.progress: [1.0, 2.0, 3.0]
+  reward.args.step: [-0.01, -0.05]
+  reward.args.goal: [10.0, 20.0]
+# epsilon_decay ---- to add
+# take random samples within value intervals e.g [0.001, 0.0005] -> min, max, + 20 rand samples inbetween (justified by literature)
