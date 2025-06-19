@@ -9,34 +9,41 @@ from reward import *
 
 class PPOTrainer:
     def __init__(self, cfg: dict):
-        self.episodes = cfg['trainer']['episodes']
-        self.max_steps = cfg['trainer']['max_steps']
-        self.update_frequency = cfg['trainer']['update_frequency']
-        self.early_stop_success_rate = cfg['trainer']['early_stop_success_rate']
-        self.early_stop_patience = cfg['trainer']['early_stop_patience']
-        self.enable_live_tracking = cfg['trainer']['enable_live_tracking']
+        self.episodes = cfg['trainer']['episodes'] # Total number of training episodes
+        self.max_steps = cfg['trainer']['max_steps'] # Maximum steps per episode
+        self.update_frequency = cfg['trainer']['update_frequency'] # How often to update the agent (in episodes)
+        self.early_stop_success_rate = cfg['trainer']['early_stop_success_rate'] # Success rate threshold to trigger early stopping
+        self.early_stop_patience = cfg['trainer']['early_stop_patience'] # Number of consecutive windows to meet early stop criterion
+        self.enable_live_tracking = cfg['trainer']['enable_live_tracking'] # Enable real-time plot tracking
 
-        self.ppo_config = PPOConfig(**cfg['PPO'])
-        self.env = self._init_env(cfg['env'])
-        self.agent = PPO(self.ppo_config)
-        self.reward = eval(cfg['reward']['name'])(cfg['reward'])
-        self.model_path = cfg['model_path']
+        self.ppo_config = PPOConfig(**cfg['PPO']) # Initialize PPO hyperparameters
+        self.env = self._init_env(cfg['env']) # Load and configure environment
+        self.agent = PPO(self.ppo_config) 
+        self.reward = eval(cfg['reward']['name'])(cfg['reward']) # Initialize reward function
+        self.model_path = cfg['model_path'] # Path to save the trained PPO model
 
     def _init_env(self, env_config: dict) -> Environment:
         env = eval(env_config['name'])
         array = np.load(env_config['map_path']).astype(np.int8)
         env = env(array, step_size=env_config['step_size'])
-        if env_config['name'] == 'MultiTargetEnvironment':
+        if env_config['name'] == 'MultiTargetEnvironment': # Optional: override goal positions if provided
             if env_config.get('goals') is not None:
                 env.goals = np.array(env_config['goals'])
         
-        if env_config['name'] == 'Environment':
+        if env_config['name'] == 'Environment': # Optional: set custom starting position
             if env_config.get('start_pos') is not None:
                 env.maze.agent_pos = np.array(env_config['start_pos'])
         return env
 
     def train(self):
-        if self.enable_live_tracking:
+        """
+        Run the PPO training loop.
+        Handles environment interaction, reward collection, PPO updates, early stopping,
+        and optional live metric tracking.
+        Returns:
+            Tuple: Trained agent, list of episode rewards, and list of episode lengths.
+        """
+        if self.enable_live_tracking: # Set up live metric visualization
             print("Live tracking enabled")
             self.tracker = LiveTracker(update_interval=self.update_frequency, window_size=50)
 
@@ -55,15 +62,15 @@ class PPOTrainer:
                 state = self.env.reset()
                 episode_reward = 0.0
                 episode_length = 0
-                position_history = deque(maxlen=self.ppo_config.recent_history_length)
+                position_history = deque(maxlen=self.ppo_config.recent_history_length)  # Track recent agent positions for loop detection
 
                 for step in range(self.max_steps):
-                    action, action_logprob = self.agent.select_action(state, training=True)
+                    action, action_logprob = self.agent.select_action(state, training=True) # Select action using current policy
                     next_state, done = self.env.step(action)
-                    reward = self.reward(self.env, done, position_history)
+                    reward = self.reward(self.env, done, position_history) # Compute shaped reward
                     position_history.append(self.env.maze.agent_pos)
 
-                    self.agent.store_transition(state, action, action_logprob, reward, next_state, done)
+                    self.agent.store_transition(state, action, action_logprob, reward, next_state, done) # Save experience to buffer
 
                     state = next_state
                     episode_reward += reward
@@ -79,12 +86,12 @@ class PPOTrainer:
                 if self.enable_live_tracking:
                     self.tracker.add_episode_data(episode + 1, episode_reward, episode_length)
 
-                if (episode + 1) % self.update_frequency == 0 and len(self.agent.memory) > 0:
+                if (episode + 1) % self.update_frequency == 0 and len(self.agent.memory) > 0: # Perform PPO update after specified number of episodes
                     actor_loss, critic_loss = self.agent.update()
                     if self.enable_live_tracking:
                         self.tracker.add_loss_data(actor_loss, critic_loss)
 
-                    if (episode + 1) % (self.update_frequency * 4) == 0:
+                    if (episode + 1) % (self.update_frequency * 4) == 0: # Periodic evaluation block
                         recent_rewards = episode_rewards[-self.update_frequency*4:]
                         recent_lengths = episode_lengths[-self.update_frequency*4:]
                         avg_reward = np.mean(recent_rewards)
@@ -98,7 +105,7 @@ class PPOTrainer:
                             print(f"  Success Rate: {success_rate:.1f}% (Recent: {recent_success_rate:.1f}%)")
                             print(f"  Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}")
 
-                        if recent_success_rate >= self.early_stop_success_rate:
+                        if recent_success_rate >= self.early_stop_success_rate: # Check for early stopping condition
                             consecutive_perfect_windows += 1
                             print(f"  Perfect success rate achieved! ({consecutive_perfect_windows}/{self.early_stop_patience})")
 
@@ -132,7 +139,15 @@ class PPOTrainer:
         return self.agent, episode_rewards, episode_lengths
 
     def test(self, episodes: int = 2, max_steps: int = 250):
-        self.agent.load(self.model_path)
+        """
+        Evaluate the trained PPO agent over several episodes.
+        Args:
+            episodes (int): Number of test episodes to run.
+            max_steps (int): Maximum steps allowed per episode.
+        Returns:
+            float: Success rate (successful episodes / total episodes).
+        """
+        self.agent.load(self.model_path) # Load saved model checkpoint
 
         print(f"Testing trained PPO agent: Start {self.env.maze.agent_pos}, Goal {self.env.maze.goal_pos}")
         print("-" * 50)
@@ -145,10 +160,10 @@ class PPOTrainer:
             steps = 0
             position_history = deque(maxlen=self.ppo_config.recent_history_length)
 
-            self.env.render()
+            self.env.render() # Visualize agent and goal in environment
             
             done = False
-            while steps < max_steps and not done:
+            while steps < max_steps and not done: # Run agent until success or max steps
                 action, _ = self.agent.select_action(state, training=False)
                 next_state, done = self.env.step(action)
 
@@ -165,9 +180,9 @@ class PPOTrainer:
             
             if done:
                 success_count += 1
-                print(f"Episode {episode + 1}: SUCCESS in {steps} steps! Reward: {episode_reward:.2f}")
+                print(f"Episode {episode + 1}: SUCCESS in {steps} steps! Reward: {episode_reward:.2f}") # Log success and reward per episode
             else:
-                print(f"Episode {episode + 1}: FAILED after {steps} steps. Reward: {episode_reward:.2f}")
+                print(f"Episode {episode + 1}: FAILED after {steps} steps. Reward: {episode_reward:.2f}") # Log failure and reward per episode
 
         print("-" * 50)
         print(f"Results: {success_count}/{episodes} successful ({success_count/episodes*100:.1f}%)")
