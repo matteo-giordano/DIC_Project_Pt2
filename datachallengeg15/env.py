@@ -192,14 +192,9 @@ class Environment:
         self.start_pos = self.maze.agent_pos                                         # Starting position of the agent
         
         # Pre-compute normalization factors for efficiency
-<<<<<<< HEAD
-        self.map_size_array = np.array([self.maze.map_height, self.maze.map_width])
-        self.map_diagonal_norm = np.linalg.norm(self.map_size_array)
-        self.t = 0
-=======
         self.map_size_array = np.array([self.maze.map_height, self.maze.map_width])  # [map_height, map_width] for normalization
         self.map_diagonal_norm = np.linalg.norm(self.map_size_array)                 # Euclidean diagonal of the map (normalization factor)
->>>>>>> refs/remotes/origin/PPO
+        self.t = 0
 
     def step(self, action: int):
         self.maze.step(action)
@@ -261,24 +256,17 @@ class MultiTargetEnvironment(Environment):
         self.maze.goal_pos = self.goal_pos # Assign the selected goal position to the maze
 
     def reset(self):
-<<<<<<< HEAD
-        self.t = 0
-        old_goal_pos = self.maze.goal_pos
-        self.maze.agent_pos = old_goal_pos
-        self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
-        while np.array_equal(old_goal_pos, self.maze.goal_pos):
-=======
         """
         Reset the agent to the previous goal, and assign a new random goal.
         Ensures the goal changes every episode for diverse training experiences.
         Returns:
             np.ndarray: The initial observation after environment reset.
         """
+        self.t = 0
         old_goal_pos = self.maze.goal_pos  # The previous goal position as new start
         self.maze.agent_pos = old_goal_pos # Set agent's position to old goal
         self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))] # Choose a new random goal
         while np.array_equal(old_goal_pos, self.maze.goal_pos): # New random goal must differ from previous
->>>>>>> refs/remotes/origin/PPO
             self.maze.goal_pos = self.goals[np.random.randint(0, len(self.goals))]
         return self._get_observation()
     
