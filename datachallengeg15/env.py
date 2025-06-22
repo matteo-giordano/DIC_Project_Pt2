@@ -305,9 +305,10 @@ class MultiTargetEnvironment(Environment):
 if __name__ == "__main__":
     from time import sleep
     warehouse_map = np.load("datachallengeg15/warehouse.npy").astype(np.int8)
-    env = MultiTargetEnvironment(warehouse_map)
-    for _ in range(100):
+    env = Environment(warehouse_map)
+    for _ in range(1):
+        env.maze.goal_pos = np.array([16.5, 1.5])
+        # env.maze.target_pos = np.array([15.8, 38.5])
         env.render()
-        action = np.random.randint(0, 8)
-        env.step(action)
-        sleep(0.01)
+
+        input('next')

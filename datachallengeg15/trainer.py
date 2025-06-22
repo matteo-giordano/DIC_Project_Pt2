@@ -33,6 +33,8 @@ class PPOTrainer:
         if env_config['name'] == 'Environment': # Optional: set custom starting position
             if env_config.get('start_pos') is not None:
                 env.maze.agent_pos = np.array(env_config['start_pos'])
+            if env_config.get('goal_pos') is not None:
+                env.maze.goal_pos = np.array(env_config['goal_pos'])
         return env
 
     def train(self):

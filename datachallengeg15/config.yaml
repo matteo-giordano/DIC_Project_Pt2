@@ -26,13 +26,13 @@ reward:
     loop_penalty: 1
 
 trainer:
-  episodes: 1380
+  episodes: 1500
   max_steps: 250
   update_frequency: 5
   early_stop_success_rate: 100.0
   early_stop_patience: 2
   enable_live_tracking: true
-  test_episodes: 2
+  test_episodes: 10
 
 env:
   map_path: "datachallengeg15/warehouse.npy"
