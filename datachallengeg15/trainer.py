@@ -191,4 +191,59 @@ class PPOTrainer:
         print(f"Average Steps: {total_steps/episodes:.1f}")
 
         return success_count / episodes
+
+    def eval(self, max_steps: int = 250, render: bool = False, return_trajectory: bool = False):
+        """
+        Run a single evaluation episode and return RL metrics.
+        Args:
+            max_steps (int): Maximum steps allowed for the episode.
+            render (bool): Whether to render the environment at each step.
+            return_trajectory (bool): Whether to return the agent's trajectory.
+        Returns:
+            dict: RL metrics including total reward, steps, success, avg value, value estimates, and optionally trajectory.
+        """
+        import torch
+        state = self.env.reset()
+        episode_reward = 0.0
+        steps = 0
+        done = False
+        position_history = deque(maxlen=self.ppo_config.recent_history_length)
+        value_estimates = []
+        trajectory = [] if return_trajectory else None
+        
+        while steps < max_steps and not done:
+            if render:
+                self.env.render()
+            # Value estimate from critic
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            if hasattr(self.agent, 'device'):
+                state_tensor = state_tensor.to(self.agent.device)
+                self.agent.critic.eval()
+            with torch.no_grad():
+                value = self.agent.critic(state_tensor).item()
+            value_estimates.append(value)
+            
+            action, _ = self.agent.select_action(state, training=True)
+            next_state, done = self.env.step(action)
+            reward = self.reward(self.env, done, position_history)
+            position_history.append(self.env.maze.agent_pos)
+            episode_reward += reward
+            steps += 1
+            if return_trajectory:
+                trajectory.append(self.env.maze.agent_pos.copy())
+            state = next_state
+        
+        # Success: reached goal if done before max_steps
+        success = bool(done)
+        avg_value = float(np.mean(value_estimates)) if value_estimates else 0.0
+        metrics = {
+            'total_reward': episode_reward,
+            'steps': steps,
+            'success': success,
+            'avg_value': avg_value,
+            'value_estimates': value_estimates,
+        }
+        if return_trajectory:
+            metrics['trajectory'] = trajectory
+        return metrics
     
