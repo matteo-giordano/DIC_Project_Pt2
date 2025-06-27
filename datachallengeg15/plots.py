@@ -5,198 +5,222 @@ import matplotlib.cm as cm
 import numpy as np
 
 # Experiment 1: Reward-Function Sweep
-df_dqn = pd.read_csv("hpo_dqn_reward.csv")
-df_ppo = pd.read_csv("hpo_ppo_reward.csv")
+df1_dqn = pd.read_csv("hpo_dqn_reward.csv")
+df1_ppo = pd.read_csv("hpo_ppo_reward.csv")
 
 # Plot 1: Step Penalty vs Final Reward (colored by Distance Penalty)
-# DQN
-norm_dqn = plt.Normalize(df_dqn["distance_penalty_coef"].min(), df_dqn["distance_penalty_coef"].max())
-colors_dqn = cm.viridis(norm_dqn(df_dqn["distance_penalty_coef"]))
-plt.scatter(df_dqn["step_penalty"], df_dqn["final_reward"], c=colors_dqn, s=50, label="DQN", marker="o")
+fig, ax = plt.subplots(figsize=(10, 6))
 
-# PPO
-norm_ppo = plt.Normalize(df_ppo["distance_penalty_coef"].min(), df_ppo["distance_penalty_coef"].max())
-colors_ppo = cm.viridis(norm_ppo(df_ppo["distance_penalty_coef"]))
-plt.scatter(df_ppo["step_penalty"], df_ppo["final_reward"], c=colors_ppo, s=50, label="PPO", marker="^")
+combined_df = pd.concat([df1_dqn, df1_ppo])
+norm = plt.Normalize(combined_df["distance_penalty_coef"].min(), combined_df["distance_penalty_coef"].max())
 
-plt.title("Step Penalty vs Final Reward\n(colored by Distance Penalty)")
-plt.xlabel("Step Penalty")
-plt.ylabel("Final Reward")
-plt.colorbar(cm.ScalarMappable(norm=norm_dqn, cmap="viridis"), label="Distance Penalty Coef")
-plt.legend()
-plt.grid(True, alpha=0.3)
+colors_dqn = cm.viridis(norm(df1_dqn["distance_penalty_coef"]))
+colors_ppo = cm.plasma(norm(df1_ppo["distance_penalty_coef"]))
+
+ax.scatter(df1_dqn["step_penalty"], df1_dqn["final_reward"],
+           c=colors_dqn, marker='o', label='DQN', s=50, alpha=0.7, edgecolor='black')
+ax.scatter(df1_ppo["step_penalty"], df1_ppo["final_reward"],
+           c=colors_ppo, marker='^', label='PPO', s=50, alpha=0.7, edgecolor='black')
+
+ax.set_title("Step Penalty vs Final Reward (DQN vs PPO)")
+ax.set_xlabel("Step Penalty")
+ax.set_ylabel("Final Reward")
+
+sm = cm.ScalarMappable(cmap="plasma", norm=norm)
+sm.set_array([])
+cbar = plt.colorbar(sm, ax=ax, pad=0.02)
+cbar.set_label('Distance Penalty Coefficient', rotation=270, labelpad=15)
+
+ax.grid(True, alpha=0.3)
+ax.legend()
 plt.tight_layout()
-plt.savefig("results/compare_step_penalty_vs_final_reward.png")
-plt.close()
+plt.savefig("results/step_penalty_vs_final_reward_dqn_ppo.png")
 
 # Plot 2: Episode Reward Distributions for Representative Step Penalties
-# Select representative step penalty values: minimum, median, and maximum
-unique_steps = sorted(df_dqn["step_penalty"].unique())
-rep_steps = [unique_steps[0], unique_steps[len(unique_steps) // 2], unique_steps[-1]]
-combined_rewards = []
-xtick_labels = []
+# Select representative step penalties (minimum, median, maximum)
+def parse_rewards(s):
+    if pd.isna(s) or s == "":
+        return []
+    if isinstance(s, float):
+        return [s]
+    if s.strip().startswith("array"):
+        import re
+        content = re.search(r"\[(.*?)\]", s)
+        if content:
+            try:
+                return [float(x) for x in content.group(1).split(",")]
+            except Exception:
+                return []
+        else:
+            return []
+    try:
+        v = ast.literal_eval(s)
+        if isinstance(v, float):
+            return [v]
+        elif isinstance(v, list):
+            return v
+        else:
+            return []
+    except Exception:
+        try:
+            return [float(x) for x in s.strip().split()]
+        except Exception:
+            return []
+
+combined_df = pd.concat([df1_dqn, df1_ppo])
+unique_steps = sorted(combined_df["step_penalty"].unique())
+rep_steps = [unique_steps[0], unique_steps[len(unique_steps)//2], unique_steps[-1]]
+labels = [f"Step={s:.3f}" for s in rep_steps]
+
+rewards_data_dqn = []
+rewards_data_ppo = []
 
 for sp in rep_steps:
-    # Select the first matching configuration for that step penalty
-    dqn_row = df_dqn[df_dqn["step_penalty"] == sp].iloc[0]
-    ppo_row = df_ppo[df_ppo["step_penalty"] == sp].iloc[0]
+    row_dqn = df1_dqn[df1_dqn["step_penalty"] == sp].iloc[0]
+    rewards_dqn = parse_rewards(row_dqn["episode_rewards"])
+    rewards_data_dqn.append(rewards_dqn)
 
-    # Parse the stringified episode reward lists into actual Python lists
-    dqn_rewards = ast.literal_eval(dqn_row["episode_rewards"])
-    ppo_rewards = ast.literal_eval(ppo_row["episode_rewards"])
-    
-    # Append to the reward list
-    combined_rewards.extend([dqn_rewards, ppo_rewards])
-    
-    # Create alternating labels: DQN and PPO for each step value
-    xtick_labels.extend([f"DQN\n{sp:.3f}", f"PPO\n{sp:.3f}"])
+    row_ppo = df1_ppo[df1_ppo["step_penalty"] == sp].iloc[0]
+    rewards_ppo = parse_rewards(row_ppo["episode_rewards"])
+    rewards_data_ppo.append(rewards_ppo)
 
-# Plot
-plt.figure(figsize=(10, 6))
-plt.boxplot(combined_rewards, labels=xtick_labels)
-plt.title("Episode Reward Distributions\n(Representative Step Penalties)")
-plt.xlabel("Algorithm and Step Penalty")
-plt.ylabel("Episode Reward")
-plt.grid(True, axis="y", alpha=0.3)
+positions = np.arange(len(labels))
+width = 0.35
+
+fig, ax = plt.subplots(figsize=(8, 6))
+
+bp1 = ax.boxplot(rewards_data_dqn, positions=positions - width/2, widths=width, patch_artist=True,
+                 boxprops=dict(facecolor='skyblue'), medianprops=dict(color='navy'))
+bp2 = ax.boxplot(rewards_data_ppo, positions=positions + width/2, widths=width, patch_artist=True,
+                 boxprops=dict(facecolor='orange'), medianprops=dict(color='darkred'))
+
+ax.set_xticks(positions)
+ax.set_xticklabels(labels)
+ax.set_title("Episode Reward Distributions by Step Penalty")
+ax.set_xlabel("Step Penalty")
+ax.set_ylabel("Episode Reward")
+ax.grid(True, axis="y", alpha=0.3)
+
+ax.plot([], c='skyblue', label='DQN')
+ax.plot([], c='orange', label='PPO')
+ax.legend()
 plt.tight_layout()
-plt.savefig("results/episode_reward_distributions_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/episode_reward_distributions_dqn_ppo.png")
 
-# Plot 3: Success Rate vs Step Penalty (colored by Distance Penalty), DQN vs PPO
-plt.figure(figsize=(8, 6))
 
-norm_dqn = plt.Normalize(df_dqn["distance_penalty_coef"].min(), df_dqn["distance_penalty_coef"].max())
-colors_dqn = cm.plasma(norm_dqn(df_dqn["distance_penalty_coef"]))
-plt.scatter(df_dqn["step_penalty"], df_dqn["success_rate"], c=colors_dqn, s=50, label="DQN", marker="o", edgecolors="black")
+# Plot 3: Success Rate vs Step Penalty (colored by Distance Penalty)
+# Normalize color mapping for distance penalty coefficient
+plt.figure(figsize=(10, 6))
+colors_dqn = cm.plasma(norm(df1_dqn["distance_penalty_coef"]))
+colors_ppo = cm.plasma(norm(df1_ppo["distance_penalty_coef"]))
 
-norm_ppo = plt.Normalize(df_ppo["distance_penalty_coef"].min(), df_ppo["distance_penalty_coef"].max())
-colors_ppo = cm.plasma(norm_ppo(df_ppo["distance_penalty_coef"]))
-plt.scatter(df_ppo["step_penalty"], df_ppo["success_rate"], c=colors_ppo, s=50, label="PPO", marker="^", edgecolors="black")
+plt.scatter(df1_dqn["step_penalty"], df1_dqn["success_rate"], c=colors_dqn, marker='o', label='DQN', s=50, edgecolor='black', alpha=0.7)
+plt.scatter(df1_ppo["step_penalty"], df1_ppo["success"], c=colors_ppo, marker='^', label='PPO', s=50, edgecolor='black', alpha=0.7)
 
-plt.title("Step Penalty vs Success Rate\n(colored by Distance Penalty)")
+plt.title("Step Penalty vs Success Rate (DQN vs PPO)")
 plt.xlabel("Step Penalty")
 plt.ylabel("Success Rate")
-plt.colorbar(cm.ScalarMappable(norm=norm_dqn, cmap="plasma"), label="Distance Penalty Coef")
+sm = cm.ScalarMappable(cmap="plasma", norm=norm)
+sm.set_array([])
+cbar = plt.colorbar(sm, ax=ax, pad=0.02)
+cbar.set_label('Distance Penalty Coefficient', rotation=270, labelpad=15)
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
-plt.savefig("results/step_penalty_vs_success_rate_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/step_penalty_vs_success_rate_dqn_ppo.png")
+
 
 # Experiment 2: Target/Seed Sweep
 df2_dqn = pd.read_csv("hpo_dqn_target.csv")
 df2_ppo = pd.read_csv("hpo_ppo_target_seed.csv")
+
 # Create a string label for each target coordinate
 df2_dqn["target_label"] = df2_dqn.apply(lambda row: f"({row['target_x']}, {row['target_y']})", axis=1)
 df2_ppo["target_label"] = df2_ppo.apply(lambda row: f"({row['target_x']}, {row['target_y']})", axis=1)
 
-# Group by target label
-group_dqn = df2_dqn.groupby("target_label")
-group_ppo = df2_ppo.groupby("target_label")
+# Group by target_label and calculate mean final rewards
+mean_rewards_dqn = df2_dqn.groupby("target_label")["final_reward"].mean()
+mean_rewards_ppo = df2_ppo.groupby("target_label")["final_reward"].mean()
 
-# Compute mean rewards
-mean_rewards_dqn = group_dqn["final_reward"].mean()
-mean_rewards_ppo = group_ppo["final_reward"].mean()
-
-# Ensure same target order
-targets = sorted(set(mean_rewards_dqn.index) & set(mean_rewards_ppo.index))
-x = np.arange(len(targets))  # x locations for groups
-bar_width = 0.35
-
-# Plot
+# Plot 1: Mean Final Reward by Target Location
+# Plot bar plots side by side
 plt.figure(figsize=(10, 6))
-plt.bar(x - bar_width/2, [mean_rewards_dqn[t] for t in targets], width=bar_width, label="DQN")
-plt.bar(x + bar_width/2, [mean_rewards_ppo[t] for t in targets], width=bar_width, label="PPO")
+x = np.arange(len(mean_rewards_dqn.index))
+width = 0.35
+plt.bar(x - width/2, mean_rewards_dqn.values, width=width, label='DQN', color='skyblue')
+plt.bar(x + width/2, mean_rewards_ppo.values, width=width, label='PPO', color='orange')
 plt.title("Mean Final Reward by Target Location")
 plt.xlabel("Target Location")
 plt.ylabel("Mean Final Reward")
-plt.xticks(x, targets, rotation=45, ha="right")
+plt.xticks(x, mean_rewards_dqn.index, rotation=45)
 plt.grid(True, axis="y", alpha=0.3)
 plt.legend()
 plt.tight_layout()
-plt.savefig("results/target_vs_mean_final_reward_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/target_vs_mean_final_reward_dqn_ppo.png")
+
 
 # Plot 2: Mean Success Rate by Target Location
-# Compute mean success rates by target for both algorithms
+# Group by target_label and calculate mean success rates (DQN has success_rate, PPO has success)
 mean_success_dqn = df2_dqn.groupby("target_label")["success_rate"].mean()
-mean_success_ppo = df2_ppo.groupby("target_label")["success_rate"].mean()
+mean_success_ppo = df2_ppo.groupby("target_label")["success"].mean()
+x = np.arange(len(mean_success_dqn.index))
+width = 0.35
 
-# Ensure target labels are aligned and sorted
-common_targets = sorted(set(mean_success_dqn.index) & set(mean_success_ppo.index))
-x = np.arange(len(common_targets))  # x-axis positions
-bar_width = 0.35
-
-# Create comparison bar chart
 plt.figure(figsize=(10, 6))
-plt.bar(x - bar_width / 2,
-        [mean_success_dqn[t] for t in common_targets],
-        width=bar_width, label="DQN", color="cornflowerblue")
-
-plt.bar(x + bar_width / 2,
-        [mean_success_ppo[t] for t in common_targets],
-        width=bar_width, label="PPO", color="lightcoral")
-
-# Annotate and format the plot
-plt.title("Mean Success Rate by Target Location (DQN vs PPO)")
+plt.bar(x - width/2, mean_success_dqn.values, width=width, label='DQN', color='skyblue')
+plt.bar(x + width/2, mean_success_ppo.values, width=width, label='PPO', color='orange')
+plt.title("Mean Success Rate by Target Location")
 plt.xlabel("Target Location")
 plt.ylabel("Mean Success Rate")
-plt.xticks(ticks=x, labels=common_targets, rotation=45, ha="right")
+plt.xticks(x, mean_success_dqn.index, rotation=45)
 plt.grid(True, axis="y", alpha=0.3)
 plt.legend()
 plt.tight_layout()
-plt.savefig("results/target_vs_mean_success_rate_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/target_vs_mean_success_rate_dqn_ppo.png")
+
 
 # Plot 3: Mean Steps to Goal by Target Location
-# Compute mean steps by target for both algorithms
 mean_steps_dqn = df2_dqn.groupby("target_label")["avg_steps"].mean()
-mean_steps_ppo = df2_ppo.groupby("target_label")["avg_steps"].mean()
+mean_steps_ppo = df2_ppo.groupby("target_label")["steps"].mean()
 
-# Find common target labels and sort them
-common_targets = sorted(set(mean_steps_dqn.index) & set(mean_steps_ppo.index))
-x = np.arange(len(common_targets))
-bar_width = 0.35
+x = np.arange(len(mean_steps_dqn.index))
+width = 0.35
 
-# Create side-by-side bar chart for comparison
 plt.figure(figsize=(10, 6))
-plt.bar(x - bar_width / 2,
-        [mean_steps_dqn[t] for t in common_targets],
-        width=bar_width, label="DQN", color="cornflowerblue")
-
-plt.bar(x + bar_width / 2,
-        [mean_steps_ppo[t] for t in common_targets],
-        width=bar_width, label="PPO", color="lightcoral")
-
-# Plot
-plt.title("Mean Steps to Goal by Target Location (DQN vs PPO)")
+plt.bar(x - width/2, mean_steps_dqn.values, width=width, label='DQN', color='skyblue')
+plt.bar(x + width/2, mean_steps_ppo.values, width=width, label='PPO', color='orange')
+plt.title("Mean Steps to Goal by Target Location")
 plt.xlabel("Target Location")
 plt.ylabel("Mean Steps")
-plt.xticks(ticks=x, labels=common_targets, rotation=45, ha="right")
+plt.xticks(x, mean_steps_dqn.index, rotation=45)
 plt.grid(True, axis="y", alpha=0.3)
 plt.legend()
 plt.tight_layout()
-plt.savefig("results/target_vs_mean_steps_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/target_vs_mean_steps_dqn_ppo.png")
+
 
 # Plot 4: Final Reward Distribution by Target Location
-common_targets = sorted(set(df2_dqn["target_label"]) & set(df2_ppo["target_label"]))
-box_data = []
-xtick_labels = []
+positions = np.arange(len(mean_steps_dqn.index))
+width = 0.3
 
-for tgt in common_targets:
-    rewards_dqn = df2_dqn[df2_dqn["target_label"] == tgt]["final_reward"].values
-    rewards_ppo = df2_ppo[df2_ppo["target_label"] == tgt]["final_reward"].values
-    box_data.extend([rewards_dqn, rewards_ppo])
-    xtick_labels.extend([f"DQN\n{tgt}", f"PPO\n{tgt}"])
+reward_lists_dqn = [df2_dqn[df2_dqn["target_label"] == lbl]["final_reward"].values for lbl in mean_steps_dqn.index]
+reward_lists_ppo = [df2_ppo[df2_ppo["target_label"] == lbl]["final_reward"].values for lbl in mean_steps_dqn.index]
 
-plt.figure(figsize=(max(12, len(xtick_labels) * 0.6), 6))
-plt.boxplot(box_data, labels=xtick_labels)
-plt.title("Final Reward Distribution by Target Location (DQN vs PPO)")
-plt.xlabel("Target Location")
-plt.ylabel("Final Reward")
-plt.xticks(rotation=45, ha="right")
-plt.grid(True, axis="y", alpha=0.3)
+fig, ax = plt.subplots(figsize=(10, 6))
+
+bp1 = ax.boxplot(reward_lists_dqn, positions=positions - width/2, widths=width, patch_artist=True,
+                 boxprops=dict(facecolor='skyblue'), medianprops=dict(color='navy'))
+bp2 = ax.boxplot(reward_lists_ppo, positions=positions + width/2, widths=width, patch_artist=True,
+                 boxprops=dict(facecolor='orange'), medianprops=dict(color='darkred'))
+
+ax.set_xticks(positions)
+ax.set_xticklabels(mean_steps_dqn.index)
+ax.set_title("Final Reward Distribution by Target Location")
+ax.set_xlabel("Target Location")
+ax.set_ylabel("Final Reward")
+ax.grid(True, axis="y", alpha=0.3)
+ax.plot([], c='skyblue', label='DQN')
+ax.plot([], c='orange', label='PPO')
+ax.legend()
 plt.tight_layout()
-plt.savefig("results/target_reward_variability_dqn_vs_ppo.png")
-plt.close()
+plt.savefig("results/target_reward_variability_dqn_ppo.png")
