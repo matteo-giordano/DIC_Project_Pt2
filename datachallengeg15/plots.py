@@ -1,12 +1,53 @@
 import ast
+import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 
+def fix_ppo_episode_rewards(df):
+    corrected_rows = []
+    i = 0
+    while i < len(df):
+        row = df.iloc[i].copy()
+        episode_str = str(row['episode_rewards']).strip()
+        if episode_str.startswith("[") and not episode_str.endswith("]"):
+            fragments = [episode_str]
+            j = i + 1
+            while j < len(df):
+                next_row = df.iloc[j]
+                values = [
+                    str(float(x)) for x in next_row.values 
+                    if isinstance(x, (float, int, np.floating, np.integer))
+                ]
+                if len(values) == 0:
+                    break
+                fragments.append(",".join(values))
+                j += 1
+            full_str = ",".join(fragments)
+            full_str = full_str if full_str.startswith("[") else "[" + full_str
+            full_str = full_str if full_str.endswith("]") else full_str + "]"
+            try:
+                parsed = ast.literal_eval(full_str)
+                if isinstance(parsed, list):
+                    parsed = [float(x) for x in parsed]
+                    row['episode_rewards'] = str(parsed)
+                else:
+                    row['episode_rewards'] = "[]"
+            except:
+                row['episode_rewards'] = "[]"
+            corrected_rows.append(row)
+            i = j
+        else:
+            corrected_rows.append(row)
+            i += 1
+    return pd.DataFrame(corrected_rows)
+
+
 # Experiment 1: Reward-Function Sweep
 df1_dqn = pd.read_csv("hpo_dqn_reward.csv")
 df1_ppo = pd.read_csv("hpo_ppo_reward.csv")
+df1_ppo = fix_ppo_episode_rewards(df1_ppo)
 
 # Plot 1: Step Penalty vs Final Reward (colored by Distance Penalty)
 fig, ax = plt.subplots(figsize=(10, 6))
