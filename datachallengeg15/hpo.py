@@ -42,7 +42,7 @@ def run_trial(config: dict) -> dict:
         }
 
 # --- Experiment 1: Reward Sweep ---
-def experiment_reward_sweep(base_config_path='datachallengeg15/config.yaml', n_reward_steps=20, output_csv='hpo_reward_sweep.csv'):
+def experiment_reward_sweep(base_config_path='datachallengeg15/config.yaml', n_reward_steps=20, output_csv='hpo_ppo_reward.csv'):
     base_config = read_config(base_config_path)
     # Fixed target and seed
     target = [9.5, 27.5]
@@ -73,7 +73,7 @@ def experiment_reward_sweep(base_config_path='datachallengeg15/config.yaml', n_r
     print(f"Reward sweep results saved to {output_csv}")
 
 # --- Experiment 2: Target/Seed Sweep ---
-def experiment_target_seed_sweep(base_config_path='datachallengeg15/config.yaml', n_targets=5, n_seeds=10, output_csv='hpo_target_seed_sweep.csv'):
+def experiment_target_seed_sweep(base_config_path='datachallengeg15/config.yaml', n_targets=5, n_seeds=10, output_csv='hpo_ppo_target_seed.csv'):
     base_config = read_config(base_config_path)
     # Use the densest reward config (last in sweep)
     reward_args = {
